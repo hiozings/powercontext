@@ -19,6 +19,7 @@ import hashlib
 import io
 import zlib
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 from pypdf import PdfWriter
@@ -243,5 +244,62 @@ def test_search_returns_scoped_distinct_page_citations_after_restart(tmp_path: P
                 for citation in statements
             ]
             assert (await registry.resolve(pages[0])).name in statement_sources
+
+    asyncio.run(scenario())
+
+
+def test_search_recalls_inflected_terms_and_zero_overlap_statement_pages(tmp_path: Path) -> None:
+    class PagePipeline:
+        async def extract(self, request: MemoryCandidateRequest, /) -> tuple[MemoryEntryInput, ...]:
+            entries = []
+            for source in request.sources:
+                assert isinstance(source, SourceObservation)
+                projection = cast(dict[str, Any], source.projection(TEXT_EVIDENCE_PROJECTION_KEY))
+                entries.append(MemoryEntryInput(kind="page", text=projection["content"], sources=(source,)))
+            return tuple(entries)
+
+    async def scenario() -> None:
+        registry = SourceDefinitionRegistry((PDF_PAGE_SOURCE_DEFINITION,))
+        config = BuiltinConfig(database=SQLiteConfig(url=f"sqlite+aiosqlite:///{tmp_path / 'recall.db'}"))
+        texts = [
+            "GEOGRAPHIC OPERATIONS Regions include North America, Europe and Asia Pacific.",
+            "CONSOLIDATED STATEMENTS OF INCOME Revenues 1000 Costs 700 Operating expenses 120",
+            "CONSOLIDATED BALANCE SHEET Total assets 2000 Total liabilities 900",
+            "Report on internal control over financial reporting.",
+        ]
+        pages = parse_pdf_document(PDFDocumentInput(document_id="ACME_2024_10K", content=pdf_bytes(texts)))
+        async with open_builtin_runtime(config, candidate_pipeline=PagePipeline()) as runtime:
+            assert runtime.scopes is not None
+            scope = await runtime.scopes.create(
+                ScopeDraft(title="Reports", summary="Reports", idempotency_key="reports")
+            )
+            await runtime.ingestion.register(manifest_for_definition(PDF_PAGE_SOURCE_DEFINITION))
+            for page in pages:
+                source = await registry.resolve(page)
+                await runtime.ingestion.submit(
+                    SubmitSourceObservation(
+                        scope_id=scope.scope_id,
+                        observation=project_source_for_transport(registry, source),
+                    )
+                )
+            assert (await runtime.memory.for_scope(scope.scope_id).flush()).processed
+        async with open_builtin_runtime(config) as runtime:
+            memory = runtime.memory.for_scope(scope.scope_id)
+
+            async def source_ids(question: str, limit: int) -> set[str]:
+                citations = await search_pdf_pages(memory, question, limit=limit)
+                return {
+                    (await memory.get(GetMemoryEntryRequest(citation=citation))).entry.sources[0].source_id
+                    for citation in citations
+                }
+
+            # A geographic heading answers ``geographies`` despite the inflection difference.
+            assert await source_ids("What geographies does ACME operate in?", 1) == {
+                (await registry.resolve(pages[0])).name
+            }
+            # The income statement shares no term with the margin question but still answers it.
+            assert (await registry.resolve(pages[1])).name in await source_ids(
+                "What drove the gross margin change this year?", 2
+            )
 
     asyncio.run(scenario())
