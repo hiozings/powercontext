@@ -106,6 +106,7 @@ class PreparedContextBuild:
     origins: tuple[PreparedContextOrigin, ...]
     omissions: PreparedContextOmissions = PreparedContextOmissions()
     code_origins: tuple[CodeEvidenceRef, ...] = ()
+    fragments: tuple[PreparedMemoryFragment, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -115,6 +116,22 @@ class MemoryEntryAddress:
     memory: ArtifactAddress
     entry_id: str
     entry_version_id: str
+
+
+@dataclass(frozen=True)
+class PreparedMemoryFragment:
+    """An unchanged half-open character interval of an exact scoped Memory entry."""
+
+    address: MemoryEntryAddress
+    start: int
+    end: int
+    text: str
+
+    def __post_init__(self) -> None:
+        if type(self.start) is not int or type(self.end) is not int or not 0 <= self.start < self.end:
+            raise PreparedContextInvariantError("fragment-range")
+        if len(self.text) != self.end - self.start:
+            raise PreparedContextInvariantError("fragment-text-length")
 
 
 PreparedContextOrigin = MemoryCitation | ArtifactRef | MemoryEntryAddress | ArtifactAddress
@@ -211,6 +228,8 @@ class PreparedContextBuilder:
         profile_candidates: Sequence[PreparedProfileCandidate] = (),
         code_candidates: Sequence[PreparedCodeCandidate] = (),
     ) -> PreparedContextBuild:
+        if request.evidence_selection:
+            return self._select_memory_evidence(request, current_scope_id, memory_candidates)
         if request.include_code:
 
             def historical(history_request: PrepareContextRequest, entries: int) -> PreparedContextBuild:
@@ -256,6 +275,46 @@ class PreparedContextBuilder:
             omissions=omissions,
         )
 
+    def _select_memory_evidence(
+        self,
+        request: PrepareContextRequest,
+        current_scope_id: str | None,
+        groups: Sequence[PreparedMemoryCandidates],
+    ) -> PreparedContextBuild:
+        from powercontext.builtin.runtime.evidence_selection import select_fragments
+
+        if sum(len(group.hits) for group in groups) > self.memory_candidate_limit:
+            raise PreparedContextInvariantError("memory-candidate-limit")
+        entries: list[tuple[MemoryEntryAddress, str]] = []
+        for group in groups:
+            scope = group.scope_id or current_scope_id
+            if group.hits and not scope:
+                raise PreparedContextInvariantError("memory-scope-missing")
+            for entry in self._memory_entries(group.memory_ref, group.hits, scope_id=scope):
+                if isinstance(entry.origin, MemoryEntryAddress):
+                    entries.append((entry.origin, entry.content))
+        fragments = select_fragments(entries, request.query, request.max_bytes, _render_fragments, self.entry_limit)
+        if not fragments:
+            return PreparedContextBuild(
+                context=self.empty(), origins=(), omissions=PreparedContextOmissions(dropped_items=len(entries))
+            )
+        content = _render_fragments(fragments)
+        selected = sum(any(fragment.address == address for fragment in fragments) for address, _ in entries)
+        return PreparedContextBuild(
+            context=PreparedContext(status="ready", content=content, content_bytes=len(content.encode("utf-8"))),
+            origins=tuple(fragment.address for fragment in fragments),
+            fragments=fragments,
+            omissions=PreparedContextOmissions(
+                dropped_items=len(entries) - selected,
+                truncated_items=sum(
+                    fragment.start != 0 or fragment.end != len(text)
+                    for fragment in fragments
+                    for address, text in entries
+                    if address == fragment.address
+                ),
+            ),
+        )
+
     def probe_budget(
         self,
         *,
@@ -277,6 +336,15 @@ class PreparedContextBuilder:
         counters because both go through :meth:`_select_entries`.
         """
 
+        if request.evidence_selection:
+            built = self._select_memory_evidence(request, current_scope_id, memory_candidates)
+            return RecallBudgetView(
+                max_bytes=request.max_bytes,
+                delivered_items=len(built.origins),
+                truncated_items=built.omissions.truncated_items,
+                dropped_items=built.omissions.dropped_items,
+                unused_bytes=max(0, request.max_bytes - built.context.content_bytes),
+            )
         content, origins, omissions = self._select_entries(
             request=request,
             current_scope_id=current_scope_id,
@@ -686,9 +754,32 @@ def _interleave_groups(groups: Sequence[Sequence[_Item]]) -> tuple[_Item, ...]:
 
 
 def _render(entries: Sequence[_PreparedContextEntry]) -> str:
+    return _render_items([_render_entry(entry) for entry in entries])
+
+
+def _render_fragments(fragments: Sequence[PreparedMemoryFragment]) -> str:
+    rendered = _render_items([
+        {
+            "citation": {
+                "scope_id": fragment.address.memory.scope_id,
+                "memory_ref": fragment.address.memory.artifact.model_dump(mode="json"),
+                "entry_id": fragment.address.entry_id,
+                "entry_version_id": fragment.address.entry_version_id,
+            },
+            "content": fragment.text,
+            "start": fragment.start,
+            "end": fragment.end,
+        }
+        for fragment in fragments
+    ])
+    # Keep the JSON envelope on one physical line; decoding restores the exact text.
+    return rendered.replace("\u0085", "\\u0085").replace("\u2028", "\\u2028").replace("\u2029", "\\u2029")
+
+
+def _render_items(items: Sequence[dict[str, object]]) -> str:
     envelope = {
         "trust": "untrusted_history",
-        "items": [_render_entry(entry) for entry in entries],
+        "items": items,
     }
     encoded = json.dumps(envelope, ensure_ascii=False, separators=(",", ":"))
     return "\n\n".join((TRUST_POLICY, f"{_BEGIN_MARKER}\n{encoded}\n{_END_MARKER}"))
