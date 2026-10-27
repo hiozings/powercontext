@@ -54,6 +54,7 @@ from powercontext.builtin.persistence.supervision import database_utc_now
 from powercontext.builtin.persistence.tables import (
     ARTIFACT_HEADS_TABLE,
     ARTIFACTS_TABLE,
+    SOURCE_LIFECYCLE_NODES_TABLE,
     TOPIC_MEMORY_ACTIVE_CHUNKS_TABLE,
     TOPIC_MEMORY_ACTIVE_TOPICS_TABLE,
     TOPIC_MEMORY_RETRIEVAL_SHAPE_TABLE,
@@ -379,6 +380,14 @@ class TopicMemoryRepository:
             .where(
                 TOPIC_MEMORY_ACTIVE_TOPICS_TABLE.c.scope_id == scope_id,
                 TOPIC_MEMORY_ACTIVE_TOPICS_TABLE.c.family == TopicMemory.family,
+                ~select(SOURCE_LIFECYCLE_NODES_TABLE.c.node_key)
+                .where(
+                    SOURCE_LIFECYCLE_NODES_TABLE.c.scope_id == scope_id,
+                    SOURCE_LIFECYCLE_NODES_TABLE.c.kind == "topic",
+                    SOURCE_LIFECYCLE_NODES_TABLE.c.artifact_id == TOPIC_MEMORY_ACTIVE_TOPICS_TABLE.c.artifact_id,
+                    SOURCE_LIFECYCLE_NODES_TABLE.c.available.is_(False),
+                )
+                .exists(),
             )
         )
         if tag_filter is not None:
@@ -477,16 +486,33 @@ class TopicMemoryRepository:
         query_terms = tuple(sorted(set(analyzed.split())))
         if not analyzed and used_mode == "fts":
             return TopicMemorySearchResult(mode=used_mode, hits=())
+        lifecycle = SOURCE_LIFECYCLE_NODES_TABLE
+        unavailable = set(
+            await connection.scalars(
+                select(lifecycle.c.artifact_id).where(
+                    lifecycle.c.scope_id == scope_id, lifecycle.c.kind == "topic", lifecycle.c.available.is_(False)
+                )
+            )
+        )
         request = TopicMemorySearchRequest(
             query=query,
             analyzed_query=" ".join(query_terms),
-            candidate_limit=min(MAX_TOPIC_MEMORY_CHANNEL_CANDIDATES, max(limit * 4, 32)),
+            candidate_limit=min(MAX_TOPIC_MEMORY_CHANNEL_CANDIDATES, max(limit * 4, 32) + len(unavailable)),
             mode=used_mode,
             query_vector=query_vector,
             embedding_profile=embedding_profile,
             admission=admission,
         )
         channels = await self.index.search(connection, scope_id, request)
+        if unavailable:
+            channels = channels.model_copy(
+                update={
+                    name: tuple(
+                        hit for hit in getattr(channels, name) if hit.artifact_ref.artifact_id not in unavailable
+                    )
+                    for name in ("topic_fts", "topic_vector", "detail_fts", "detail_vector")
+                }
+            )
         await self._check_retrieval_shape(connection)
         outcome = _fuse_topic_memory_rankings(query, channels, limit, mode=used_mode, admission=admission)
         return TopicMemorySearchResult(

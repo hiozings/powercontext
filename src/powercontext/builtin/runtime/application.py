@@ -249,6 +249,7 @@ from powercontext.builtin.runtime.recall_sufficiency import (
     build_recall_candidates,
     recall_effort,
 )
+from powercontext.builtin.runtime.source_lifecycle import SourceLifecycleApplication, SourceLifecycleStore
 from powercontext.builtin.runtime.statistics import RelationalScopedStatistics, overview_selection
 from powercontext.builtin.scope import ScopeApplication, ScopeDescriptor, ScopeSelection
 from powercontext.builtin.scope.subject_sources import SubjectSourceService
@@ -3030,6 +3031,7 @@ class BuiltinRuntime:
         remote_skill_distribution: RemoteSkillDistributionService | None = None,
         statistics_service: StatisticsServiceFactory | None = None,
         record_service: RecordService | None = None,
+        source_lifecycle: SourceLifecycleStore | None = None,
         prompt_service: PromptService | None = None,
         recall_token_estimator: RecallTokenEstimator | None = None,
         recall_effort_sink: RecallEffortSink | None = None,
@@ -3128,6 +3130,7 @@ class BuiltinRuntime:
         self.memory = MemoryApplication(self)
         self.topic_memory = TopicMemoryApplication(self)
         self.records = RecordApplication(self)
+        self.lifecycle = SourceLifecycleApplication(self, source_lifecycle)
         self.prompts = PromptApplication(self)
         self.review = ReviewApplication(self)
         self.skill = SkillApplication(self)

@@ -1421,6 +1421,22 @@ class RelationalContexts:
         )
         return self._contexts.setdefault(scope, context)
 
+    def source_lifecycle(self):
+        from powercontext.builtin.runtime.source_lifecycle import SourceLifecycleStore
+
+        def memory_service(scope_id: str, connection: AsyncConnection) -> MemoryService:
+            services = self._services_for(scope_id)
+            _, catalog = services.sources(connection)
+            return services.memory(catalog, connection)
+
+        return SourceLifecycleStore(
+            self.database,
+            self.repositories.sources,
+            self.repositories.artifacts,
+            memory_service,
+            self._memory_artifact_id,
+        )
+
     def _services_for(self, scope_id: str) -> _ScopedServices:
         scope = validate_scope_id(scope_id)
         return _ScopedServices(
