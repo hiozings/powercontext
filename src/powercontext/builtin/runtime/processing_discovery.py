@@ -23,7 +23,7 @@ from powercontext.builtin.persistence.cursors import SourceCursorRepository
 from powercontext.builtin.persistence.database import AsyncDatabase
 from powercontext.builtin.persistence.processing_intents import ArtifactProcessingIntentRepository
 from powercontext.builtin.persistence.supervision import ArtifactProcessingFence, ArtifactProcessingLeaseRepository
-from powercontext.builtin.persistence.tables import PROFILE_POLICIES_TABLE, SOURCE_JOURNAL_HEADS_TABLE
+from powercontext.builtin.persistence.tables import PROFILE_POLICIES_TABLE, SOURCE_JOURNAL_HEADS_TABLE, SOURCES_TABLE
 
 
 async def enabled_profile_scopes(connection: AsyncConnection, scope_ids: tuple[str, ...]) -> frozenset[str]:
@@ -52,6 +52,43 @@ class SourceProcessingPendingProvider:
         self._database = database
         self._binding = binding_name
         self._family = artifact_family
+
+    async def count_ready_scopes(
+        self, connection: AsyncConnection, scope_ids: tuple[str, ...], *, threshold: int
+    ) -> frozenset[str]:
+        """Check persisted identities after this Family's successful cursor.
+
+        The scope/position index bounds each lookup to the threshold, without
+        loading Source bodies or counting the entire unprocessed journal.
+        """
+
+        if not scope_ids:
+            return frozenset()
+        cursors = await SourceCursorRepository().load_many(connection, scope_ids, self._binding)
+        heads = SOURCE_JOURNAL_HEADS_TABLE
+        rows = await connection.execute(
+            select(heads.c.scope_id, heads.c.position).where(heads.c.scope_id.in_(scope_ids))
+        )
+        high_watermarks = {str(scope): int(position) for scope, position in rows}
+        table = SOURCES_TABLE
+        ready = set()
+        for scope in scope_ids:
+            cursor = cursors.get(scope)
+            after = 0 if cursor is None else cursor.cursor.sequence
+            # Positions provide only an upper bound: gaps must not count as rows.
+            # This also avoids passing arbitrarily large configured counts to SQL OFFSET.
+            if high_watermarks.get(scope, 0) - after < threshold:
+                continue
+            position = await connection.scalar(
+                select(table.c.journal_position)
+                .where(table.c.scope_id == scope, table.c.journal_position > after)
+                .order_by(table.c.journal_position)
+                .offset(threshold - 1)
+                .limit(1)
+            )
+            if position is not None:
+                ready.add(scope)
+        return frozenset(ready)
 
     async def reconcile(self, after_scope_id: str | None, limit: int, *, fence: ArtifactProcessingFence) -> str | None:
         heads = SOURCE_JOURNAL_HEADS_TABLE

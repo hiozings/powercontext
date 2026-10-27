@@ -719,8 +719,12 @@ def _artifact_processing_bindings(  # noqa: C901 - validate and assemble one reg
         "profile": config.runtime.profile_schedule_enabled or None,
         "skill": None,
     }
+    count_thresholds = {
+        "memory": config.runtime.memory_source_count_threshold,
+        "topic-memory": config.runtime.topic_memory_source_count_threshold,
+    }
     for family, schedule in automatic.items():
-        if schedule is not None and family not in declared | registered:
+        if (schedule is not None or count_thresholds.get(family) is not None) and family not in declared | registered:
             if (
                 family == "topic-memory"
                 and config.runtime.artifact_processing_families is None
@@ -771,6 +775,8 @@ def _artifact_processing_bindings(  # noqa: C901 - validate and assemble one reg
             entrypoint = partial(run_family_worker, FamilyWorkerSpec(config=config, worker_security=worker_security))
         interval = None if family == "profile" else automatic[family]
         binding = canonical[family]
+        pending = None if family == "skill" else SourceProcessingPendingProvider(contexts.database, binding, family)
+        threshold = count_thresholds.get(family)
         configured.append(
             ArtifactProcessingBinding(
                 binding_name=binding,
@@ -783,10 +789,11 @@ def _artifact_processing_bindings(  # noqa: C901 - validate and assemble one reg
                 if family == "profile" and config.runtime.profile_schedule_enabled
                 else None,
                 timezone=config.runtime.profile_timezone if family == "profile" else "Asia/Shanghai",
-                pending_provider=None
-                if family == "skill"
-                else SourceProcessingPendingProvider(contexts.database, binding, family),
+                pending_provider=pending,
                 automatic_scope_filter=enabled_profile_scopes if family == "profile" else None,
+                automatic_count_filter=partial(pending.count_ready_scopes, threshold=threshold)
+                if pending is not None and threshold is not None
+                else None,
             )
         )
     _validate_processing_registrations(configured)
