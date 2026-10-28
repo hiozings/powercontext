@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>寻章 · 把读过的论文，变成随时可问的出处</title>
+<meta name="description" content="寻章是面向研究者的文献与资料检索助手：seekdb 用语义、关键词与元数据三路混合检索定位原文片段，PowerContext 记住研究主题与阅读进度。">
+<meta name="theme-color" content="#F4F0E6">
+<meta property="og:title" content="寻章 · 文献检索与阅读记忆助手">
+<meta property="og:description" content="语义、关键词、元数据三路混合检索，每条结果都回到原文页码；研究记忆让下一次检索更接近你想要的段落。">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%231B1815'/%3E%3Cpath d='M18 20h28M18 32h28M18 44h18' stroke='%23F4F0E6' stroke-width='3.4' stroke-linecap='round'/%3E%3Ccircle cx='46' cy='44' r='6' fill='%23B03A2E'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+<a class="skip-link" href="#demo">跳到检索演示</a>
+
+<header class="site-head">
+  <div class="wrap head-inner">
+    <a class="brand" href="#top" aria-label="寻章，回到页首">
+      <span class="brand-mark" aria-hidden="true">章</span>
+      <span class="brand-text">寻章<em>XUNZHANG</em></span>
+    </a>
+    <nav class="nav" aria-label="页面导航">
+      <a href="#problem">痛点</a>
+      <a href="#features">能力</a>
+      <a href="#architecture">架构</a>
+      <a href="#verify">验证</a>
+      <a href="#build-log">开发记录</a>
+    </nav>
+    <a class="ghost-link" href="#repo">代码仓库<span aria-hidden="true">↗</span></a>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="wrap hero-grid">
+      <div class="hero-copy reveal">
+        <p class="eyebrow"><span>方向一</span>文献与资料检索</p>
+        <h1 id="hero-title">把读过的论文，<br>变成随时可问的<span class="accent">出处</span>。</h1>
+        <p class="hero-lede">寻章把论文、课程笔记和实验记录收进 seekdb：语义、关键词、元数据三路一起找，每条结果都回到原文页码。PowerContext 记住你的研究主题与阅读进度，让下一次检索更接近你真正想要的那一段。</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="#demo">试用检索演示</a>
+          <a class="btn btn-quiet" href="#architecture">看技术分工<span aria-hidden="true">↓</span></a>
+        </div>
+        <ul class="hero-facts" aria-label="技术要点">
+          <li><b>seekdb</b><span>混合检索</span></li>
+          <li><b>PowerContext</b><span>研究记忆</span></li>
+          <li><b>页码级</b><span>出处回溯</span></li>
+        </ul>
+      </div>
+
+      <div class="demo-shell reveal" id="demo">
+        <div class="demo-head">
+          <span class="demo-badge"><i aria-hidden="true"></i>检索演示</span>
+          <span class="demo-note">内置样例语料 · 5 篇 / 12 个片段</span>
+        </div>
+
+        <form class="search" role="search" id="search-form">
+          <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4.5 4.5"></path></svg>
+          <label class="sr-only" for="query">检索问题</label>
+          <input id="query" name="query" type="search" autocomplete="off" spellcheck="false" value="长文档切块边界怎么处理" placeholder="例如：长文档切块边界怎么处理">
+          <button type="submit">检索</button>
+        </form>
+
+        <div class="demo-tools">
+          <div class="chips" aria-label="示例问题">
+            <button type="button" class="chip" data-q="长文档切块边界怎么处理">切块边界</button>
+            <button type="button" class="chip" data-q="RAG 评估看哪些指标">评估指标</button>
+            <button type="button" class="chip" data-q="向量召回和关键词召回怎么融合">混合检索</button>
+            <button type="button" class="chip" data-q="组会说的 baseline 是什么">组会 baseline</button>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="memory-toggle" checked>
+            <span class="switch-track" aria-hidden="true"><span class="switch-dot"></span></span>
+            <span class="switch-label">使用研究记忆<em>PowerContext</em></span>
+          </label>
+        </div>
+
+        <div class="memory-strip" id="memory-strip" aria-live="polite"></div>
+
+        <div class="results" id="results" aria-live="polite" aria-busy="false"></div>
+
+        <p class="demo-foot">演示在浏览器内完成检索，使用内置样例语料；完整链路由 seekdb 提供混合检索，PowerContext 读写记忆。</p>
+      </div>
+    </div>
+
+    <div class="wrap">
+      <ol class="pipeline reveal" id="pipeline" aria-label="本次检索的四个步骤">
+        <li>
+          <span class="step-no">01</span>
+          <div>
+            <h3>查询理解</h3>
+            <p id="pipe-expand">读取研究记忆，扩展同义表达</p>
+          </div>
+        </li>
+        <li>
+          <span class="step-no">02</span>
+          <div>
+            <h3>三路召回</h3>
+            <p id="pipe-recall">向量 · 全文 · 元数据</p>
+          </div>
+        </li>
+        <li>
+          <span class="step-no">03</span>
+          <div>
+            <h3>融合排序</h3>
+            <p id="pipe-rank">0.55 语义 + 0.45 关键词</p>
+          </div>
+        </li>
+        <li>
+          <span class="step-no">04</span>
+          <div>
+            <h3>出处输出</h3>
+            <p id="pipe-out">文档 · 页码 · 原文片段</p>
+          </div>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="problem" class="section" aria-labelledby="problem-title">
+    <div class="wrap">
+      <header class="sec-head reveal">
+        <p class="eyebrow"><span>01</span>痛点</p>
+        <h2 id="problem-title">找一段话，<br class="mobile-break">为什么总要花半小时？</h2>
+        <p class="lede">不是没有读过，而是读过的东西没有留下可检索的轨迹。</p>
+      </header>
+
+      <div class="problem-grid">
+        <article class="note-card reveal">
+          <p class="note-kicker">综述期</p>
+          <blockquote>“我记得有篇论文说过这个限制，但想不起是哪篇、第几页。”</blockquote>
+          <p>几十篇 PDF 平铺在文件夹里，靠文件名和记忆翻找；真正需要的是一句原话和它的出处。</p>
+        </article>
+        <article class="note-card reveal">
+          <p class="note-kicker">复习期</p>
+          <blockquote>“笔记散在四个工具里，关键词又记不准。”</blockquote>
+          <p>课程笔记、划线和摘录没有统一入口；按标题翻太慢，按关键词搜又要求你记得原文怎么说。</p>
+        </article>
+        <article class="note-card reveal">
+          <p class="note-kicker">汇报前</p>
+          <blockquote>“baseline、指标口径、上周的结论，各在一处。”</blockquote>
+          <p>组会记录、实验日志和论文结论需要临时拼接，拼完还说不清每个数字来自哪里。</p>
+        </article>
+      </div>
+
+      <p class="problem-foot reveal">关键词检索要求你记得原文怎么说；纯语义检索又常常给不出准确出处。<strong>寻章要同时解决“找得到”和“说得清”。</strong></p>
+    </div>
+  </section>
+
+  <section id="features" class="section section-tint" aria-labelledby="features-title">
+    <div class="wrap">
+      <header class="sec-head reveal">
+        <p class="eyebrow"><span>02</span>核心能力</p>
+        <h2 id="features-title">一次检索，三路信号，<br>一条可核验的出处。</h2>
+        <p class="lede">检索不是给出一个“看起来相关”的答案，而是把你带回那句话所在的页面。</p>
+      </header>
+
+      <div class="feature-grid">
+        <article class="feature reveal">
+          <p class="feature-tag">seekdb</p>
+          <h3>混合召回</h3>
+          <p>向量负责意思相近，BM25 负责专有名词与精确短语，元数据负责范围。三路候选在一次查询里汇合，而不是各搜一遍再人工对照。</p>
+        </article>
+        <article class="feature reveal">
+          <p class="feature-tag">seekdb</p>
+          <h3>出处可核验</h3>
+          <p>每条结果带文档、页码、原文片段与命中信号。点开就能核对，引用格式可以直接复制，不必再翻回 PDF。</p>
+        </article>
+        <article class="feature reveal">
+          <p class="feature-tag">PowerContext</p>
+          <h3>研究记忆</h3>
+          <p>研究主题、关注方法、阅读进度与最近检索写入记忆。检索前读取并扩展查询，而不是每次都从零开始猜你要什么。</p>
+        </article>
+        <article class="feature reveal">
+          <p class="feature-tag">PowerContext</p>
+          <h3>阅读进度</h3>
+          <p>按主题记录已读与待读，回顾“本周读了什么、还缺哪一块”。笔记与论文进同一索引，组会前不必再翻聊天记录。</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="architecture" class="section section-dark" aria-labelledby="arch-title">
+    <div class="wrap">
+      <header class="sec-head reveal">
+        <p class="eyebrow"><span>03</span>架构与分工</p>
+        <h2 id="arch-title">谁负责检索，谁负责记住。</h2>
+        <p class="lede">seekdb 存事实——片段、向量、全文索引与元数据；PowerContext 存关于你的上下文——主题、偏好、进度与最近检索。</p>
+      </header>
+
+      <div class="flow reveal" role="img" aria-label="检索流程：导入文档后切块入 seekdb；查询先由 PowerContext 扩展，再进入 seekdb 三路召回与融合排序，输出带页码的结果，并把本次检索写回记忆。">
+        <div class="flow-row">
+          <div class="flow-node"><span>导入</span><b>论文 · 笔记 · 日志</b><em>PDF / Markdown / TXT</em></div>
+          <div class="flow-arrow" aria-hidden="true">→</div>
+          <div class="flow-node"><span>切块</span><b>保留页码与标题</b><em>chunk + metadata</em></div>
+          <div class="flow-arrow" aria-hidden="true">→</div>
+          <div class="flow-node is-core"><span>seekdb</span><b>向量 · 全文 · 过滤</b><em>一次查询，三路召回</em></div>
+          <div class="flow-arrow" aria-hidden="true">→</div>
+          <div class="flow-node"><span>融合</span><b>归一化加权排序</b><em>semantic + keyword</em></div>
+          <div class="flow-arrow" aria-hidden="true">→</div>
+          <div class="flow-node"><span>输出</span><b>片段 + 页码出处</b><em>可复制引用</em></div>
+        </div>
+        <div class="memory-loop">
+          <span class="loop-line" aria-hidden="true"></span>
+          <div class="flow-node is-memory"><span>PowerContext</span><b>研究主题 · 关注方法 · 阅读进度</b><em>检索前读取，检索后写回</em></div>
+          <span class="loop-note">查询扩展 ↑　↓ 本次检索写回</span>
+        </div>
+      </div>
+
+      <div class="division reveal">
+        <table>
+          <caption>两个组件在项目里的实际分工</caption>
+          <thead>
+            <tr><th scope="col">组件</th><th scope="col">负责什么</th><th scope="col">可以核对什么</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">seekdb</th>
+              <td>存储切块、向量、全文索引与元数据；一次查询完成语义召回、关键词召回和年份 / 标签过滤。</td>
+              <td>每条结果的页码、原文片段，以及语义与关键词两路分数。</td>
+            </tr>
+            <tr>
+              <th scope="row">PowerContext</th>
+              <td>保存研究主题、关注方法、阅读进度与最近检索；检索前读取并扩展查询，检索后写回本次记录。</td>
+              <td>记忆条目、查询扩展词，以及开关记忆前后的结果差异。</td>
+            </tr>
+            <tr>
+              <th scope="row">Qoder</th>
+              <td>需求拆解、检索演示与整站实现、调试，以及通过 Qoder Sites 发布网站。</td>
+              <td>下方开发记录与随提交材料提供的对话截图。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="verify" class="section" aria-labelledby="verify-title">
+    <div class="wrap">
+      <header class="sec-head reveal">
+        <p class="eyebrow"><span>04</span>验证样例</p>
+        <h2 id="verify-title">三分钟，<br class="mobile-break">验证它真的能找到出处。</h2>
+        <p class="lede">下面的步骤可以直接在本页完成，不需要安装任何依赖。</p>
+      </header>
+
+      <div class="verify-grid">
+        <ol class="steps reveal">
+          <li>
+            <span class="step-no">1</span>
+            <div>
+              <h3>检索切块边界</h3>
+              <p>输入「长文档切块边界怎么处理」，保持「使用研究记忆」开启。前三条应来自《长文档问答中的分块边界与上下文割裂》p.4、p.3 与《实验记录：chunk size 与重叠对召回的影响》p.2。</p>
+            </div>
+          </li>
+          <li>
+            <span class="step-no">2</span>
+            <div>
+              <h3>核对原文与信号</h3>
+              <p>展开任意一条结果，确认原文片段、文档名、页码与引用格式一致，并查看语义 / 关键词两路分数。</p>
+            </div>
+          </li>
+          <li>
+            <span class="step-no">3</span>
+            <div>
+              <h3>关闭记忆再查一次</h3>
+              <p>关闭记忆后输入「评估指标」。不再扩展 evaluation、忠实度等词：C p.1 的关键词信号从 1.00 降到 0.63，D p.2 升到 0.75，与 C p.4 几乎持平。</p>
+            </div>
+          </li>
+          <li>
+            <span class="step-no">4</span>
+            <div>
+              <h3>跨类型检索</h3>
+              <p>输入「组会说的 baseline 是什么」。组会笔记与实验日志和论文在同一索引里，同样带页码返回。</p>
+            </div>
+          </li>
+        </ol>
+
+        <div class="verify-table reveal">
+          <table>
+            <caption>预期结果对照</caption>
+            <thead>
+              <tr><th scope="col">输入</th><th scope="col">开启记忆 · 前三条</th><th scope="col">关闭记忆的变化</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>长文档切块边界怎么处理</td><td>A p.4 / A p.3 / E p.2</td><td>扩展词消失，E p.2 的关键词信号从 0.72 降到 0.49</td></tr>
+              <tr><td>RAG 评估看哪些指标</td><td>C p.1 / C p.4 / A p.6</td><td>C p.1 的关键词信号从 1.00 降到 0.63，D p.2 上升</td></tr>
+              <tr><td>向量召回和关键词召回怎么融合</td><td>B p.2 / B p.5 / B p.7</td><td>排序变化：B p.5 取代 B p.2 成为第一</td></tr>
+              <tr><td>组会说的 baseline 是什么</td><td>D p.1 / D p.2 / E p.1</td><td>语义候选从 10 个降到 3 个，E p.1 融合分数由 0.30 降到 0.18</td></tr>
+            </tbody>
+          </table>
+          <p class="table-note">A–E 为站内样例文档编号，完整标题见检索结果。</p>
+        </div>
+      </div>
+
+      <aside class="honest reveal">
+        <p><strong>关于演示边界。</strong>站内演示使用内置样例语料，检索在浏览器内完成，用于展示交互与排序逻辑；样例文档不来自真实论文，也不代表真实检索服务的结果。完整链路把同一套召回与融合放到 seekdb 上执行，并由 PowerContext 读写记忆。</p>
+      </aside>
+    </div>
+  </section>
+
+  <section id="build-log" class="section section-tint" aria-labelledby="log-title">
+    <div class="wrap">
+      <header class="sec-head reveal">
+        <p class="eyebrow"><span>05</span>Qoder 开发记录</p>
+        <h2 id="log-title">这个网站，<br>怎么拆出来、<br class="mobile-break">做出来、发出去。</h2>
+        <p class="lede">从竞赛题目到可访问的网站，主要开发环节都在 Qoder 中完成。</p>
+      </header>
+
+      <ol class="timeline reveal">
+        <li>
+          <div class="time">需求拆解</div>
+          <div class="time-body">
+            <h3>把“方向一”收敛成一个可演示的切片</h3>
+            <p>从文献检索的痛点出发，拆出检索、出处、记忆、展示四条主线；确定先做“输入问题 → 三路召回 → 带页码结果”的主流程，而不是先铺功能清单。</p>
+          </div>
+        </li>
+        <li>
+          <div class="time">技术分工</div>
+          <div class="time-body">
+            <h3>让 seekdb 与 PowerContext 各管一件事</h3>
+            <p>seekdb 负责片段存储与混合检索，PowerContext 负责研究画像、阅读进度与检索历史；明确“检索前读记忆、检索后写回”的闭环，避免两个组件重复存同一份数据。</p>
+          </div>
+        </li>
+        <li>
+          <div class="time">实现</div>
+          <div class="time-body">
+            <h3>先做能操作的检索面板</h3>
+            <p>在 Qoder 中完成 BM25 与 TF-IDF 双路融合、记忆扩展、信号解释、出处抽屉与整站视觉；样例语料按论文、笔记、实验日志三类组织，保留页码与标签。</p>
+          </div>
+        </li>
+        <li>
+          <div class="time">调试</div>
+          <div class="time-body">
+            <h3>逐个问题对照预期结果</h3>
+            <p>用四组示例问题核对排序是否符合预期，修正中文分词、扩展词权重与命中高亮；为移动端重排检索面板与流程说明。</p>
+          </div>
+        </li>
+        <li>
+          <div class="time">发布</div>
+          <div class="time-body">
+            <h3>通过 Qoder Sites 发布</h3>
+            <p>本地验证交互后，将静态产物发布为公开站点，确保未登录状态下可以直接打开并体验检索演示。</p>
+          </div>
+        </li>
+      </ol>
+
+      <p class="log-note reveal">完整对话截图与 Qoder 账号 UID 随提交材料提供，用于核对站点归属与开发过程。</p>
+    </div>
+  </section>
+
+  <section id="repo" class="section" aria-labelledby="repo-title">
+    <div class="wrap repo-grid">
+      <div class="reveal">
+        <p class="eyebrow"><span>06</span>项目资产</p>
+        <h2 id="repo-title">代码、站点与说明，<br>都在同一个目录里。</h2>
+        <p class="lede">站点源码与静态产物位于竞赛分支的 <code>qoder/</code> 目录：<code>site/</code> 是源文件，<code>dist/</code> 是发布产物。</p>
+      </div>
+      <div class="repo-card reveal">
+        <dl>
+          <div><dt>代码仓库</dt><dd><a href="https://github.com/hiozings/powercontext/tree/2026-competition-ecosystem" rel="noopener">hiozings/powercontext · 2026-competition-ecosystem ↗</a></dd></div>
+          <div><dt>项目目录</dt><dd><code>qoder/</code></dd></div>
+          <div><dt>技术</dt><dd>seekdb · PowerContext · Qoder Sites</dd></div>
+          <div><dt>许可</dt><dd>Apache-2.0</dd></div>
+        </dl>
+        <p class="repo-note">本地预览：<code>cd qoder/dist &amp;&amp; python3 -m http.server 4173</code>，打开 <code>http://127.0.0.1:4173</code>。</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-foot">
+  <div class="wrap foot-inner">
+    <p><span class="brand-mark small" aria-hidden="true">章</span>寻章 · XUNZHANG</p>
+    <p>2026 Qoder × OceanBase 参赛作品 · 基于 seekdb 与 PowerContext</p>
+  </div>
+</footer>
+
+<dialog id="detail" aria-labelledby="detail-title">
+  <div class="detail-head">
+    <p class="detail-kicker" id="detail-kicker">原文片段</p>
+    <button type="button" class="detail-close" id="detail-close" aria-label="关闭">×</button>
+  </div>
+  <h2 id="detail-title">标题</h2>
+  <p class="detail-meta" id="detail-meta"></p>
+  <p class="detail-text" id="detail-text"></p>
+  <div class="detail-signals" id="detail-signals"></div>
+  <div class="detail-actions">
+    <button type="button" class="btn btn-primary" id="copy-citation">复制引用</button>
+    <span class="detail-hint">样例数据，仅用于演示</span>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<noscript>
+  <div class="wrap noscript">检索演示需要启用 JavaScript；页面说明与架构内容仍可阅读。</div>
+</noscript>
+
+<script src="assets/corpus.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
