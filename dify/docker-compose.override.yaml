@@ -1,0 +1,33 @@
+# 放在 Dify 的 docker/ 目录下使用（与 docker-compose.yaml 同级）。
+# 作用：
+#   1. 把 PowerContext 作为 Dify 同网络的服务启动，Dify 通过 http://powercontext:8000 访问；
+#   2. 复用 Dify 的 ssrf_proxy_network，使 HTTP Request 节点可以访问这个私网服务。
+services:
+  powercontext:
+    build:
+      context: ./powercontext
+      dockerfile: Dockerfile
+    image: powercontext-demo:1.2.0
+    restart: unless-stopped
+    environment:
+      POWERCONTEXT_HOME: /data
+      POWERCONTEXT_SERVER_HTTP_HOST: 0.0.0.0
+      POWERCONTEXT_SERVER_HTTP_PORT: "8000"
+      POWERCONTEXT_SERVER_AUTH_ENABLED: "true"
+      POWERCONTEXT_SERVER_AUTH_TOKEN: ${POWERCONTEXT_DEMO_TOKEN:?请在 .env 中设置 POWERCONTEXT_DEMO_TOKEN}
+    ports:
+      # 仅本机可访问，用于 seed/inspect 脚本；如 8000 被占用可改成 127.0.0.1:8001:8000，
+      # 并把 README 中脚本的 --base-url 改为 http://127.0.0.1:8001。
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./powercontext-data:/data
+    networks:
+      - ssrf_proxy_network
+      - default
+
+networks:
+  # Dify 默认在 docker/ 目录启动，网络名是 docker_ssrf_proxy_network；
+  # 如果目录名不同，请用 `docker network ls | grep ssrf` 查到的实际名称替换。
+  ssrf_proxy_network:
+    external: true
+    name: docker_ssrf_proxy_network
