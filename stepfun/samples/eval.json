@@ -1,0 +1,14 @@
+[
+  { "query": "长文档切块时边界应该怎么选？", "relevant": ["chunking"] },
+  { "query": "为什么相邻片段之间要保留重叠？", "relevant": ["chunking"] },
+  { "query": "RRF 是怎么把两路召回结果融合的？", "relevant": ["hybrid"] },
+  { "query": "混合检索能不能在客户端分别取两路结果再拼起来？", "relevant": ["hybrid", "seekdb"] },
+  { "query": "Recall@5 和 nDCG@5 有什么区别？", "relevant": ["eval"] },
+  { "query": "HNSW 的 ef_search 参数影响什么？", "relevant": ["ann"] },
+  { "query": "INT8 量化后模型体积能缩小多少？", "relevant": ["quant"] },
+  { "query": "WebGPU 不可用时应用应该怎么处理？", "relevant": ["webgpu"] },
+  { "query": "BGE 模型查询时为什么要加指令前缀？", "relevant": ["bge"] },
+  { "query": "seekdb 的全文索引如何处理中文？", "relevant": ["token", "seekdb"] },
+  { "query": "为什么向量和原文都要留在本地？", "relevant": ["privacy", "browser"] },
+  { "query": "RAG 系统里召回和生成如何分工？", "relevant": ["rag"] }
+]

@@ -1,0 +1,172 @@
+{
+  "timestamp": "2026-10-28T11:22:23.804Z",
+  "dtype": "fp32",
+  "device": "wasm",
+  "deviceReason": "未能获取 GPU 适配器",
+  "model": "BGE-small-zh-v1.5 FP32",
+  "modelBytes": 94851877,
+  "loadMs": 948,
+  "ingest": {
+    "chunks": 17,
+    "embedMs": 3047.224999997765,
+    "addMs": 99,
+    "refreshMs": 418,
+    "docs": 12
+  },
+  "recall5": 1,
+  "ndcg5": 0.9590120890757922,
+  "medianQueryMs": 29,
+  "queries": [
+    {
+      "query": "长文档切块时边界应该怎么选？",
+      "docs": [
+        "chunking",
+        "rag",
+        "hybrid",
+        "bge",
+        "privacy"
+      ],
+      "recall": 1,
+      "ndcg": 1,
+      "ms": 44.03500000014901
+    },
+    {
+      "query": "为什么相邻片段之间要保留重叠？",
+      "docs": [
+        "chunking",
+        "rag",
+        "token",
+        "ann",
+        "eval"
+      ],
+      "recall": 1,
+      "ndcg": 1,
+      "ms": 28.109999999403954
+    },
+    {
+      "query": "RRF 是怎么把两路召回结果融合的？",
+      "docs": [
+        "hybrid",
+        "seekdb",
+        "ann",
+        "rag"
+      ],
+      "recall": 1,
+      "ndcg": 1,
+      "ms": 28.229999996721745
+    },
+    {
+      "query": "混合检索能不能在客户端分别取两路结果再拼起来？",
+      "docs": [
+        "hybrid",
+        "token",
+        "rag",
+        "seekdb"
+      ],
+      "recall": 1,
+      "ndcg": 0.8772153153380493,
+      "ms": 36.87999999895692
+    },
+    {
+      "query": "Recall@5 和 nDCG@5 有什么区别？",
+      "docs": [
+        "quant",
+        "eval",
+        "ann",
+        "rag"
+      ],
+      "recall": 1,
+      "ndcg": 0.6309297535714575,
+      "ms": 43.67500000074506
+    },
+    {
+      "query": "HNSW 的 ef_search 参数影响什么？",
+      "docs": [
+        "ann",
+        "seekdb",
+        "hybrid",
+        "bge",
+        "token"
+      ],
+      "recall": 1,
+      "ndcg": 1,
+      "ms": 29.109999999403954
+    },
+    {
+      "query": "INT8 量化后模型体积能缩小多少？",
+      "docs": [
+        "quant",
+        "bge",
+        "rag",
+        "eval"
+      ],
+      "recall": 1,
+      "ndcg": 1,
+      "ms": 29.524999998509884
+    },
+    {
+      "query": "WebGPU 不可用时应用应该怎么处理？",
+      "docs": [
+        "webgpu",
+        "bge",
+        "seekdb",
+        "browser"
+      ],
+      "recall": 1,
+      "ndcg": 1,
+      "ms": 30.46499999985099
+    },
+    {
+      "query": "BGE 模型查询时为什么要加指令前缀？",
+      "docs": [
+        "bge",
+        "rag",
+        "browser",
+        "webgpu",
+        "ann"
+      ],
+      "recall": 1,
+      "ndcg": 1,
+      "ms": 26.054999999701977
+    },
+    {
+      "query": "seekdb 的全文索引如何处理中文？",
+      "docs": [
+        "seekdb",
+        "token",
+        "bge",
+        "hybrid",
+        "ann"
+      ],
+      "recall": 1,
+      "ndcg": 1,
+      "ms": 28.679999999701977
+    },
+    {
+      "query": "为什么向量和原文都要留在本地？",
+      "docs": [
+        "privacy",
+        "browser",
+        "rag",
+        "webgpu",
+        "bge"
+      ],
+      "recall": 1,
+      "ndcg": 1,
+      "ms": 25.510000001639128
+    },
+    {
+      "query": "RAG 系统里召回和生成如何分工？",
+      "docs": [
+        "rag",
+        "hybrid",
+        "bge",
+        "token",
+        "seekdb"
+      ],
+      "recall": 1,
+      "ndcg": 1,
+      "ms": 27.21000000089407
+    }
+  ]
+}

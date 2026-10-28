@@ -1,0 +1,18 @@
+{
+  "model": "BAAI/bge-small-zh-v1.5",
+  "dim": 512,
+  "source": "https://modelscope.cn/models/Xenova/bge-small-zh-v1.5/resolve/master",
+  "files": {
+    "q8": {
+      "path": "onnx/model_quantized.onnx",
+      "bytes": 24010842,
+      "sha256": "15b717c382bcb518ba457b93ea6850ede7f4f1cd8937454aa06972366cd19bcc"
+    },
+    "fp32": {
+      "path": "onnx/model.onnx",
+      "bytes": 94851877,
+      "sha256": "69a0b846f4f116b5e6aabf9546ea6754d02264f3211a13a1bd69b31b8040749a",
+      "downloaded": false
+    }
+  }
+}

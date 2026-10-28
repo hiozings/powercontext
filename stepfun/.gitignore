@@ -1,0 +1,8 @@
+node_modules/
+web/dist/
+server/data/
+server/public/
+web/public/models/bge-small-zh-v1.5/onnx/model.onnx
+*.part
+*.log
+.DS_Store

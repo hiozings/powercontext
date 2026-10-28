@@ -1,0 +1,24 @@
+{
+  "name": "duanyue-local-kb",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "web",
+    "server"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c blue,green \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "npm --workspace server run dev",
+    "dev:web": "npm --workspace web run dev",
+    "build": "npm --workspace web run build",
+    "start": "npm run build && npm --workspace server run start",
+    "fetch:model": "node scripts/fetch-models.mjs",
+    "fetch:model:fp32": "node scripts/fetch-models.mjs --fp32"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

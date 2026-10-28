@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="端阅：在浏览器本地完成文档向量化，用 seekdb 做向量与全文混合检索的迷你知识库。"
+    />
+    <title>端阅 · 端侧知识库</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/">
+        <span class="brand-mark">端</span>
+        <span class="brand-text">端阅<em>on-device knowledge base</em></span>
+      </a>
+      <div class="statuses" aria-live="polite">
+        <span class="pill" id="pill-model"><i></i>模型准备中</span>
+        <span class="pill" id="pill-device"><i></i>推理后端</span>
+        <span class="pill" id="pill-db"><i></i>seekdb</span>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <p class="eyebrow">seekdb × 阶跃星辰 · 端侧推理与混合检索</p>
+        <h1>把知识库，<br /><span>放进浏览器里。</span></h1>
+        <p class="lede">
+          文档在你的设备上切块、向量化，向量与原文写入本地
+          seekdb；查询时，向量召回与全文召回由 seekdb 在一次混合检索中完成。
+          没有云端推理 API，也没有预先算好的结果。
+        </p>
+        <ul class="hero-facts">
+          <li><strong>0</strong><span>次云端推理调用</span></li>
+          <li><strong>1</strong><span>次请求内完成混合检索</span></li>
+          <li><strong>100%</strong><span>向量与原文留在本机</span></li>
+        </ul>
+      </section>
+
+      <section class="workspace">
+        <aside class="panel library" aria-labelledby="library-title">
+          <div class="panel-head">
+            <div>
+              <p class="kicker">01 / 知识库</p>
+              <h2 id="library-title">导入与状态</h2>
+            </div>
+            <span class="ghost-count" id="kb-stat">— 个片段</span>
+          </div>
+
+          <div class="kb-row">
+            <label class="field grow">
+              <span>当前知识库</span>
+              <select id="kb-select"></select>
+            </label>
+            <button class="icon-btn" id="kb-new" title="新建知识库" aria-label="新建知识库">
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <path d="M10 4v12M4 10h12" />
+              </svg>
+            </button>
+          </div>
+
+          <div class="dropzone" id="dropzone" tabindex="0" role="button">
+            <input id="file-input" type="file" multiple accept=".txt,.md,.markdown,text/plain,text/markdown" hidden />
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M4 15.5V19a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3.5" />
+            </svg>
+            <p><b>拖入 .md / .txt</b>，或点击选择文件</p>
+            <small>文本只在本机切块与向量化，随后写入本地 seekdb</small>
+          </div>
+
+          <details class="paste">
+            <summary>或粘贴一段文本</summary>
+            <label class="field">
+              <span>标题</span>
+              <input id="paste-title" type="text" placeholder="例如：组会记录 10-28" maxlength="80" />
+            </label>
+            <label class="field">
+              <span>正文</span>
+              <textarea id="paste-text" rows="4" placeholder="粘贴需要入库的内容…"></textarea>
+            </label>
+            <button class="text-btn" id="paste-add">加入待导入</button>
+          </details>
+
+          <ul class="queue" id="queue" aria-live="polite"></ul>
+
+          <div class="import-actions">
+            <button class="primary" id="import-btn" disabled>导入知识库</button>
+            <button class="text-btn" id="sample-btn">导入示例语料</button>
+          </div>
+
+          <div class="progress" id="progress" hidden>
+            <div class="progress-top">
+              <span id="progress-label">准备中</span>
+              <span id="progress-count"></span>
+            </div>
+            <div class="bar"><i id="progress-bar"></i></div>
+            <p class="progress-detail" id="progress-detail"></p>
+          </div>
+
+          <dl class="chatty" id="import-metrics">
+            <div><dt>模型加载</dt><dd id="m-load">—</dd></div>
+            <div><dt>向量化</dt><dd id="m-embed">—</dd></div>
+            <div><dt>写入 seekdb</dt><dd id="m-add">—</dd></div>
+            <div><dt>索引刷新</dt><dd id="m-refresh">—</dd></div>
+          </dl>
+
+          <div class="batch-row">
+            <label class="field">
+              <span>批大小</span>
+              <select id="batch-size">
+                <option value="1">1</option>
+                <option value="4">4</option>
+                <option value="8" selected>8</option>
+                <option value="16">16</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>片段上限</span>
+              <span class="static-value">420 字 / 重叠 60</span>
+            </label>
+          </div>
+        </aside>
+
+        <section class="panel search" aria-labelledby="search-title">
+          <div class="panel-head">
+            <div>
+              <p class="kicker">02 / 检索</p>
+              <h2 id="search-title">问你的知识库</h2>
+            </div>
+            <span class="engine-tag">seekdb hybrid · RRF</span>
+          </div>
+
+          <form class="search-form" id="search-form">
+            <label class="sr-only" for="query">检索问题</label>
+            <input id="query" type="search" autocomplete="off" placeholder="例如：切块边界怎么定？混合检索的分数怎么融合？" />
+            <button class="primary" id="search-btn" disabled>检索</button>
+          </form>
+
+          <div class="suggestions" id="suggestions">
+            <button type="button">长文档为什么要切块，边界怎么定？</button>
+            <button type="button">向量召回和关键词召回如何融合？</button>
+            <button type="button">RAG 评测常用哪些指标？</button>
+          </div>
+
+          <div class="search-meta" id="search-meta" hidden>
+            <span>查询向量化 <b id="q-embed">—</b></span>
+            <span>seekdb 混合检索 <b id="q-db">—</b></span>
+            <span>端到端 <b id="q-total">—</b></span>
+          </div>
+
+          <ol class="results" id="results" aria-live="polite"></ol>
+          <div class="empty" id="search-empty">
+            <p>导入文档后，这里会按 seekdb 的融合排序返回片段与出处。</p>
+            <p class="empty-hint">排序由 seekdb 的 DBMS_HYBRID_SEARCH 完成，浏览器只负责生成查询向量。</p>
+          </div>
+        </section>
+      </section>
+
+      <section class="panel bench" aria-labelledby="bench-title">
+        <div class="panel-head">
+          <div>
+            <p class="kicker">03 / 性能与质量</p>
+            <h2 id="bench-title">端侧推理与量化实测</h2>
+          </div>
+          <button class="text-btn" id="eval-btn" disabled>运行检索评测</button>
+        </div>
+
+        <div class="bench-grid">
+          <div class="bench-block">
+            <h3>模型与量化</h3>
+            <table class="data-table">
+              <thead><tr><th>配置</th><th>文件体积</th><th>量化</th></tr></thead>
+              <tbody>
+                <tr><td>BGE-small-zh-v1.5 · FP32</td><td id="size-fp32">91.0 MB</td><td>基线</td></tr>
+                <tr><td>BGE-small-zh-v1.5 · INT8</td><td id="size-int8">23.0 MB</td><td>压缩 ≈ <span id="ratio">3.96</span>×</td></tr>
+              </tbody>
+            </table>
+            <p class="fine">模型来自 BAAI/bge-small-zh-v1.5（MIT），使用 Xenova 的 ONNX 导出与官方 INT8 预量化文件；体积按实际文件字节数统计。</p>
+          </div>
+
+          <div class="bench-block">
+            <h3>本次运行</h3>
+            <table class="data-table" id="run-table">
+              <thead><tr><th>指标</th><th>数值</th></tr></thead>
+              <tbody>
+                <tr><td>推理后端</td><td id="run-device">—</td></tr>
+                <tr><td>模型冷启动</td><td id="run-load">—</td></tr>
+                <tr><td>向量化吞吐</td><td id="run-throughput">—</td></tr>
+                <tr><td>seekdb 入库 + 刷新</td><td id="run-ingest">—</td></tr>
+                <tr><td>seekdb 混合检索</td><td id="run-search">—</td></tr>
+                <tr><td>端到端查询</td><td id="run-e2e">—</td></tr>
+              </tbody>
+            </table>
+            <p class="fine">冷启动包含模型文件读取与 ONNX 会话初始化；吞吐按本次导入的片段数 / 纯向量化耗时计算。重复查询不重复加载模型。</p>
+          </div>
+
+          <div class="bench-block">
+            <h3>检索质量</h3>
+            <table class="data-table" id="eval-table">
+              <thead><tr><th>指标</th><th>INT8</th></tr></thead>
+              <tbody>
+                <tr><td>Recall@5</td><td id="eval-recall">—</td></tr>
+                <tr><td>nDCG@5</td><td id="eval-ndcg">—</td></tr>
+                <tr><td>评测查询</td><td id="eval-count">—</td></tr>
+              </tbody>
+            </table>
+            <p class="fine" id="eval-note">评测使用 samples/eval.json 的标注查询集，文档级去重后计算 Recall@5 与 nDCG@5。</p>
+          </div>
+        </div>
+
+        <details class="eval-detail">
+          <summary>查看逐条评测结果</summary>
+          <div id="eval-rows" class="eval-rows"></div>
+        </details>
+      </section>
+
+      <section class="panel note" id="tech" aria-labelledby="tech-title">
+        <div class="panel-head">
+          <div>
+            <p class="kicker">04 / 技术说明</p>
+            <h2 id="tech-title">为什么这样搭</h2>
+          </div>
+          <span class="engine-tag">完整版见 TECHNICAL-NOTE.md</span>
+        </div>
+        <div class="note-grid">
+          <article>
+            <h3>端侧推理</h3>
+            <p>Transformers.js + ONNX Runtime Web 在浏览器内执行 BGE 模型。优先请求 WebGPU；不可用或初始化失败时自动改用 WASM，并在右上角明确显示当前后端。</p>
+          </article>
+          <article>
+            <h3>存进 seekdb</h3>
+            <p>集合使用 <code>ngram</code> 全文索引与 HNSW 余弦向量索引。浏览器只提交向量与原文，入库、索引刷新与检索都在本地 seekdb 中完成。</p>
+          </article>
+          <article>
+            <h3>混合检索</h3>
+            <p><code>collection.hybridSearch()</code> 调用 seekdb 的 <code>DBMS_HYBRID_SEARCH</code>，在一次调用里完成全文与向量召回，并用 RRF 融合；客户端不做二次拼合。</p>
+          </article>
+          <article>
+            <h3>增量与状态</h3>
+            <p>同一文档再次导入时先按 <code>doc_id</code> 删除旧片段再写入，随后调用 <code>dbms_index_manager.refresh()</code>，确保新内容立即可检索；知识库切换状态持久化在本地。</p>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>端阅 · 2026 Qoder × OceanBase 竞赛作品 · seekdb × 阶跃星辰赛题</p>
+      <p>seekdb / seekdb-js（Apache-2.0）· BAAI BGE-small-zh-v1.5（MIT）· Transformers.js（Apache-2.0）</p>
+    </footer>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
