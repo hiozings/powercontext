@@ -22,8 +22,11 @@
     dialogSignals: document.getElementById("detail-signals"),
     dialogClose: document.getElementById("detail-close"),
     copy: document.getElementById("copy-citation"),
-    toast: document.getElementById("toast")
+    toast: document.getElementById("toast"),
+    engineBadge: document.getElementById("engine-badge")
   };
+
+  var live = { enabled: false, info: null, controller: null, seq: 0 };
 
   var index = [];
   var idf = new Map();
@@ -158,6 +161,14 @@
   }
 
   function search(query, memoryOn) {
+    if (live.enabled) {
+      liveSearch(query, memoryOn);
+      return;
+    }
+    localSearch(query, memoryOn);
+  }
+
+  function localSearch(query, memoryOn) {
     var q = query.trim();
     if (!q) {
       renderEmpty("输入一个问题，开始检索。");
@@ -227,11 +238,12 @@
     });
 
     results.forEach(function (result, i) {
-      var doc = result.item.doc;
-      var chunk = result.item.chunk;
+      var doc = docOf(result);
+      var chunk = chunkOf(result);
+      var key = keyOf(result);
       var article = document.createElement("article");
       article.className = "result";
-      article.dataset.key = result.item.key;
+      article.dataset.key = key;
       article.style.setProperty("--delay", i * 45 + "ms");
 
       var pct = Math.round(result.score * 100);
@@ -249,7 +261,7 @@
             '<span class="signal"><span class="sig-label">语义</span><span class="sig-bar"><i style="width:' + Math.round(result.sem * 100) + '%"></i></span><span class="sig-num">' + result.sem.toFixed(2) + "</span></span>" +
             '<span class="signal"><span class="sig-label">关键词</span><span class="sig-bar"><i style="width:' + Math.round(result.kw * 100) + '%"></i></span><span class="sig-num">' + result.kw.toFixed(2) + "</span></span>" +
             '<span class="result-score" title="融合分数">融合 ' + (pct / 100).toFixed(2) + "</span>" +
-            '<button type="button" class="result-open" data-key="' + result.item.key + '">查看原文 <span aria-hidden="true">→</span></button>' +
+            '<button type="button" class="result-open" data-key="' + key + '">查看原文 <span aria-hidden="true">→</span></button>' +
           "</div>" +
         "</div>";
 
@@ -299,24 +311,31 @@
       els.pipeExpand.textContent = "未使用记忆，按原样检索";
     }
 
+    if (state.live) {
+      els.pipeRecall.textContent = "seekdb 向量候选 " + state.stats.candidates + " · 全文命中 " + state.stats.keyword_hits;
+      els.pipeRank.textContent = "0.55 语义 + 0.45 关键词" + (state.memoryOn ? " + 记忆加成" : "") + " · " + state.stats.elapsed_ms + " ms";
+      els.pipeOut.textContent = state.count + " 条结果 · 均带页码";
+      return;
+    }
+
     els.pipeRecall.textContent = "语义 " + state.semCount + " · 关键词 " + state.kwCount + " · 过滤 0";
     els.pipeRank.textContent = "0.55 语义 + 0.45 关键词" + (state.memoryOn ? " + 记忆加成" : "");
     els.pipeOut.textContent = state.count + " 条结果 · 均带页码";
   }
 
   function openDetail(key) {
-    var found = currentResults.filter(function (r) { return r.item.key === key; })[0];
+    var found = currentResults.filter(function (r) { return keyOf(r) === key; })[0];
     if (!found) return;
-    var doc = found.item.doc;
-    var chunk = found.item.chunk;
+    var doc = docOf(found);
+    var chunk = chunkOf(found);
 
-    els.dialogKicker.textContent = "原文片段 · 内置样例 · " + doc.kind;
+    els.dialogKicker.textContent = "原文片段 · " + (live.enabled ? "seekdb 检索结果" : "内置样例") + " · " + doc.kind;
     els.dialogTitle.textContent = "《" + doc.title + "》";
     els.dialogMeta.textContent = doc.year + " · " + doc.venue + " · p." + chunk.page;
     els.dialogText.textContent = chunk.text;
     els.dialogSignals.innerHTML =
-      '<span><b>' + found.sem.toFixed(2) + "</b>语义（概念向量）</span>" +
-      '<span><b>' + found.kw.toFixed(2) + "</b>关键词（BM25）</span>" +
+      '<span><b>' + found.sem.toFixed(2) + "</b>语义（" + (live.enabled ? "seekdb 向量" : "概念向量") + "）</span>" +
+      '<span><b>' + found.kw.toFixed(2) + "</b>关键词（" + (live.enabled ? "ngram 全文" : "BM25") + "）</span>" +
       '<span><b>' + found.score.toFixed(2) + "</b>融合分数" + (found.boost ? "（含记忆加成）" : "") + "</span>";
     els.copy.dataset.citation = "《" + doc.title + "》，" + doc.year + "，" + doc.venue + "，第 " + chunk.page + " 页。";
 
@@ -386,6 +405,135 @@
   function runSearch() {
     searchTimerQuery = els.input.value;
     scheduleSearch();
+  }
+
+  function docOf(result) { return result.doc || result.item.doc; }
+  function chunkOf(result) { return result.chunk || result.item.chunk; }
+  function keyOf(result) { return result.key || result.item.key; }
+
+  function probeLive() {
+    if (!window.fetch || !window.AbortController) return;
+    // 只在本地检索服务（默认 8787）或显式 ?live=1 时探测，静态托管下不产生多余请求
+    var onService = window.location.port === "8787" || /[?&]live=1\b/.test(window.location.search);
+    if (!onService) return;
+    var controller = new AbortController();
+    var timer = setTimeout(function () { controller.abort(); }, 1500);
+    fetch("/api/health", { signal: controller.signal, cache: "no-store" })
+      .then(function (resp) { return resp.ok ? resp.json() : null; })
+      .then(function (info) {
+        clearTimeout(timer);
+        if (!info || info.engine !== "seekdb") return;
+        live.enabled = true;
+        live.info = info;
+        setEngineBadge("live");
+        search(els.input.value, els.memoryToggle.checked);
+      })
+      .catch(function () { clearTimeout(timer); });
+  }
+
+  function setEngineBadge(mode) {
+    if (!els.engineBadge) return;
+    if (mode === "live" && live.info) {
+      var version = String(live.info.version).replace(/^.*seekdb-/, "seekdb ");
+      els.engineBadge.textContent = version + " · " + live.info.chunks + " 个片段 · " +
+        (live.info.memory.reachable ? "PowerContext 已连接" : "PowerContext 未连接");
+      els.engineBadge.classList.add("is-live");
+      return;
+    }
+    if (mode === "fallback") {
+      els.engineBadge.textContent = "内置样例语料 · 5 篇 / 12 个片段";
+      els.engineBadge.classList.remove("is-live");
+    }
+  }
+
+  function liveSearch(query, memoryOn) {
+    var q = query.trim();
+    if (!q) {
+      renderEmpty("输入一个问题，开始检索。");
+      updatePipeline(null);
+      return;
+    }
+
+    if (live.controller) live.controller.abort();
+    var controller = new AbortController();
+    live.controller = controller;
+    var seq = ++live.seq;
+    var timer = setTimeout(function () { controller.abort(); }, 4000);
+    els.results.setAttribute("aria-busy", "true");
+
+    fetch("/api/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: q, memory: memoryOn, limit: 5 }),
+      signal: controller.signal
+    }).then(function (resp) {
+      if (!resp.ok) throw new Error("HTTP " + resp.status);
+      return resp.json();
+    }).then(function (data) {
+      clearTimeout(timer);
+      if (seq !== live.seq) return;
+      applyLive(data, q, memoryOn);
+    }).catch(function (err) {
+      clearTimeout(timer);
+      if (seq !== live.seq || (err && err.name === "AbortError")) return;
+      live.enabled = false;
+      setEngineBadge("fallback");
+      showToast("seekdb 服务不可用，已切回内置演示");
+      localSearch(q, memoryOn);
+    });
+  }
+
+  function applyLive(data, query, memoryOn) {
+    var tokens = new Map();
+    tokenize(query).forEach(function (t) { tokens.set(t, 1); });
+    var results = (data.results || []).map(function (r) {
+      return {
+        key: r.chunk_id,
+        doc: {
+          code: r.doc_code, title: r.doc_title, year: r.doc_year,
+          venue: r.doc_venue, kind: r.doc_kind, tags: r.tags || []
+        },
+        chunk: { page: r.page, text: r.content },
+        sem: r.sem_norm,
+        kw: r.kw_norm,
+        score: r.score,
+        boost: r.boost
+      };
+    });
+
+    currentResults = results;
+    els.results.setAttribute("aria-busy", "false");
+    renderResults(results, query, tokens);
+    renderLiveMemory(data.memory);
+    updatePipeline({
+      parsed: { expanded: (data.memory && data.memory.expansions) || [] },
+      memoryOn: memoryOn,
+      live: true,
+      stats: data.stats,
+      count: results.length
+    });
+    lastQuery = query;
+  }
+
+  function renderLiveMemory(mem) {
+    if (!mem || !mem.enabled) {
+      els.memoryStrip.innerHTML =
+        '<span class="mem-badge is-off">记忆暂停</span>' +
+        '<span class="mem-line">本次检索不读取 PowerContext，也不写回检索记录。</span>';
+      return;
+    }
+
+    var profile = mem.profile || CORPUS.profile;
+    var chips = (mem.expansions || []).slice(0, 5).map(function (term) {
+      return "<i>" + escapeHtml(term) + "</i>";
+    }).join("");
+    var recalled = (mem.recalled || []).length;
+
+    els.memoryStrip.innerHTML =
+      '<span class="mem-badge">' + (mem.source === "powercontext" ? "PowerContext" : "本地画像") + "</span>" +
+      '<span class="mem-line">主题 <b>' + escapeHtml(profile.topic) + "</b> · 焦点 <b>" + escapeHtml(profile.focus[0]) + "</b> · 已读 <b>" + profile.read + " / " + profile.total + "</b></span>" +
+      (chips ? '<span class="mem-expand">扩展 ' + chips + "</span>" : '<span class="mem-expand is-quiet">本次查询无需扩展</span>') +
+      '<span class="mem-write">' + (recalled ? "召回 " + recalled + " 条历史检索" : "记忆已写回") + "</span>";
   }
 
   function escapeHtml(value) {
@@ -478,4 +626,5 @@
   renderMemoryStrip([], true);
   search(els.input.value, true);
   els.results.classList.remove("is-loading");
+  probeLive();
 })();

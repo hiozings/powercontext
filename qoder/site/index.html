@@ -53,7 +53,7 @@
       <div class="demo-shell reveal" id="demo">
         <div class="demo-head">
           <span class="demo-badge"><i aria-hidden="true"></i>检索演示</span>
-          <span class="demo-note">内置样例语料 · 5 篇 / 12 个片段</span>
+          <span class="demo-note" id="engine-badge">内置样例语料 · 5 篇 / 12 个片段</span>
         </div>
 
         <form class="search" role="search" id="search-form">
@@ -81,7 +81,7 @@
 
         <div class="results" id="results" aria-live="polite" aria-busy="false"></div>
 
-        <p class="demo-foot">演示在浏览器内完成检索，使用内置样例语料；完整链路由 seekdb 提供混合检索，PowerContext 读写记忆。</p>
+        <p class="demo-foot">由 <code>qoder/server</code> 提供时，检索直接走 seekdb 的向量 + 全文 + 标量混合查询，记忆读写走 PowerContext；直接打开静态页时回退为浏览器内演示，页头会标明当前引擎。</p>
       </div>
     </div>
 
@@ -218,13 +218,13 @@
           <tbody>
             <tr>
               <th scope="row">seekdb</th>
-              <td>存储切块、向量、全文索引与元数据；一次查询完成语义召回、关键词召回和年份 / 标签过滤。</td>
-              <td>每条结果的页码、原文片段，以及语义与关键词两路分数。</td>
+              <td>存储切块、向量、全文索引与元数据；一条 SQL 同时完成 HNSW 向量召回、ngram 全文打分与年份过滤，再由服务层融合排序。</td>
+              <td>运行 <code>qoder/server/verify.py</code> 复现实测结果，或在结果卡片上核对页码与两路信号分数。</td>
             </tr>
             <tr>
               <th scope="row">PowerContext</th>
-              <td>保存研究主题、关注方法、阅读进度与最近检索；检索前读取并扩展查询，检索后写回本次记录。</td>
-              <td>记忆条目、查询扩展词，以及开关记忆前后的结果差异。</td>
+              <td>保存研究主题、关注方法、阅读进度与最近检索；检索前读取并扩展查询，检索后把命中的页码写回 scope。</td>
+              <td>记忆区显示 scope 与召回条数；重复检索时可见每条 0.03 的召回加成。</td>
             </tr>
             <tr>
               <th scope="row">Qoder</th>
@@ -242,7 +242,7 @@
       <header class="sec-head reveal">
         <p class="eyebrow"><span>04</span>验证样例</p>
         <h2 id="verify-title">三分钟，<br class="mobile-break">验证它真的能找到出处。</h2>
-        <p class="lede">下面的步骤可以直接在本页完成，不需要安装任何依赖。</p>
+        <p class="lede">本页可以直接试交互；换成 <code>qoder/server</code> 启动后，同样的输入会走真实的 seekdb 混合检索与 PowerContext 记忆。</p>
       </header>
 
       <div class="verify-grid">
@@ -250,52 +250,52 @@
           <li>
             <span class="step-no">1</span>
             <div>
-              <h3>检索切块边界</h3>
-              <p>输入「长文档切块边界怎么处理」，保持「使用研究记忆」开启。前三条应来自《长文档问答中的分块边界与上下文割裂》p.4、p.3 与《实验记录：chunk size 与重叠对召回的影响》p.2。</p>
+              <h3>启动本地服务</h3>
+              <p>在 <code>qoder/server</code> 运行 <code>python app.py</code>，打开 <code>127.0.0.1:8787</code>。页头出现「seekdb v1.4.0.0 · 12 个片段 · PowerContext 已连接」即表示链路就绪。</p>
             </div>
           </li>
           <li>
             <span class="step-no">2</span>
             <div>
-              <h3>核对原文与信号</h3>
-              <p>展开任意一条结果，确认原文片段、文档名、页码与引用格式一致，并查看语义 / 关键词两路分数。</p>
+              <h3>关闭记忆检索切块边界</h3>
+              <p>关闭「使用研究记忆」，输入「长文档切块边界怎么处理」。前三条为 E p.2、A p.4、A p.3，E p.2 的关键词信号为 1.00。</p>
             </div>
           </li>
           <li>
             <span class="step-no">3</span>
             <div>
-              <h3>关闭记忆再查一次</h3>
-              <p>关闭记忆后输入「评估指标」。不再扩展 evaluation、忠实度等词：C p.1 的关键词信号从 1.00 降到 0.63，D p.2 升到 0.75，与 C p.4 几乎持平。</p>
+              <h3>打开记忆再查一次</h3>
+              <p>启用记忆后查询被扩展为 chunk、分块、片段、overlap，E p.1 的关键词信号升到 1.00 并排到第一；E p.2 的关键词信号降到 0.31。</p>
             </div>
           </li>
           <li>
             <span class="step-no">4</span>
             <div>
-              <h3>跨类型检索</h3>
-              <p>输入「组会说的 baseline 是什么」。组会笔记与实验日志和论文在同一索引里，同样带页码返回。</p>
+              <h3>核对原文与跨会话记忆</h3>
+              <p>展开任意结果核对页码与引用；再重复一次「组会说的 baseline 是什么」，记忆区会显示召回了上一轮检索记录，三条结果各获得 0.03 加成。</p>
             </div>
           </li>
         </ol>
 
         <div class="verify-table reveal">
           <table>
-            <caption>预期结果对照</caption>
+            <caption>实测结果对照 · seekdb v1.4.0 + PowerContext 1.4.1</caption>
             <thead>
-              <tr><th scope="col">输入</th><th scope="col">开启记忆 · 前三条</th><th scope="col">关闭记忆的变化</th></tr>
+              <tr><th scope="col">输入</th><th scope="col">开启记忆 · 前三条</th><th scope="col">关闭记忆后的变化</th></tr>
             </thead>
             <tbody>
-              <tr><td>长文档切块边界怎么处理</td><td>A p.4 / A p.3 / E p.2</td><td>扩展词消失，E p.2 的关键词信号从 0.72 降到 0.49</td></tr>
-              <tr><td>RAG 评估看哪些指标</td><td>C p.1 / C p.4 / A p.6</td><td>C p.1 的关键词信号从 1.00 降到 0.63，D p.2 上升</td></tr>
-              <tr><td>向量召回和关键词召回怎么融合</td><td>B p.2 / B p.5 / B p.7</td><td>排序变化：B p.5 取代 B p.2 成为第一</td></tr>
-              <tr><td>组会说的 baseline 是什么</td><td>D p.1 / D p.2 / E p.1</td><td>语义候选从 10 个降到 3 个，E p.1 融合分数由 0.30 降到 0.18</td></tr>
+              <tr><td>长文档切块边界怎么处理</td><td>E p.1 / A p.4 / E p.2</td><td>E p.2 回到第一；E p.1 的关键词信号从 1.00 降到 0.29，E p.2 从 0.31 升到 1.00</td></tr>
+              <tr><td>RAG 评估看哪些指标</td><td>C p.1 / C p.4 / A p.6</td><td>C p.4 让位给 D p.2，D p.2 的关键词信号从 0.34 升到 0.62</td></tr>
+              <tr><td>向量召回和关键词召回怎么融合</td><td>B p.2 / B p.5 / B p.7</td><td>排序变化：B p.5 取代 B p.2 成为第一，B p.2 的关键词信号从 1.00 降到 0.17</td></tr>
+              <tr><td>组会说的 baseline 是什么</td><td>D p.1 / D p.2 / E p.1</td><td>前三条不变；E p.1 命中「召回」标签，融合分数由 0.12 降到 0.08</td></tr>
             </tbody>
           </table>
-          <p class="table-note">A–E 为站内样例文档编号，完整标题见检索结果。</p>
+          <p class="table-note">数值来自 <code>qoder/server/verify.py</code> 的实测输出；A–E 为样例文档编号，完整标题见检索结果。</p>
         </div>
       </div>
 
       <aside class="honest reveal">
-        <p><strong>关于演示边界。</strong>站内演示使用内置样例语料，检索在浏览器内完成，用于展示交互与排序逻辑；样例文档不来自真实论文，也不代表真实检索服务的结果。完整链路把同一套召回与融合放到 seekdb 上执行，并由 PowerContext 读写记忆。</p>
+        <p><strong>关于演示边界。</strong>直接打开托管站点时，检索在浏览器内按同一套权重近似计算，用于展示交互，分数与本地服务可能略有差异，页头会标明「内置样例语料」。通过 <code>qoder/server</code> 打开时，检索由 seekdb 执行，记忆由 PowerContext 读写，页头显示真实引擎版本。样例文档为虚构语料，不来自真实论文。</p>
       </aside>
     </div>
   </section>
@@ -327,21 +327,28 @@
           <div class="time">实现</div>
           <div class="time-body">
             <h3>先做能操作的检索面板</h3>
-            <p>在 Qoder 中完成 BM25 与 TF-IDF 双路融合、记忆扩展、信号解释、出处抽屉与整站视觉；样例语料按论文、笔记、实验日志三类组织，保留页码与标签。</p>
+            <p>在 Qoder 中完成浏览器侧的融合排序、记忆扩展、信号解释、出处抽屉与整站视觉；样例语料按论文、笔记、实验日志三类组织，保留页码与标签。</p>
+          </div>
+        </li>
+        <li>
+          <div class="time">接入</div>
+          <div class="time-body">
+            <h3>把检索搬到 seekdb 上跑</h3>
+            <p>用 pylibseekdb 嵌入式实例建表、导入 12 个片段并建立 ngram 全文与 HNSW 向量索引；把两路召回合并成一条 SQL，再接入 PowerContext 的 scope、检索与写回接口。</p>
           </div>
         </li>
         <li>
           <div class="time">调试</div>
           <div class="time-body">
             <h3>逐个问题对照预期结果</h3>
-            <p>用四组示例问题核对排序是否符合预期，修正中文分词、扩展词权重与命中高亮；为移动端重排检索面板与流程说明。</p>
+            <p>用四组问题分别跑关闭记忆与开启记忆两遍，写断言脚本核对前三名与记忆加成；据此修正中文二元分词、扩展词权重、召回加成的上限与移动端排版。</p>
           </div>
         </li>
         <li>
           <div class="time">发布</div>
           <div class="time-body">
             <h3>通过 Qoder Sites 发布</h3>
-            <p>本地验证交互后，将静态产物发布为公开站点，确保未登录状态下可以直接打开并体验检索演示。</p>
+            <p>本地验证交互与接口后，将静态产物发布为公开站点；托管版在浏览器内演示，本地服务运行时同一页面自动切到真实 seekdb 检索，页头标明当前引擎。</p>
           </div>
         </li>
       </ol>
@@ -355,16 +362,16 @@
       <div class="reveal">
         <p class="eyebrow"><span>06</span>项目资产</p>
         <h2 id="repo-title">代码、站点与说明，<br>都在同一个目录里。</h2>
-        <p class="lede">站点源码与静态产物位于竞赛分支的 <code>qoder/</code> 目录：<code>site/</code> 是源文件，<code>dist/</code> 是发布产物。</p>
+        <p class="lede">竞赛分支的 <code>qoder/</code> 目录里：<code>site/</code> 是站点源文件，<code>server/</code> 是 seekdb 检索服务与 PowerContext 客户端，<code>dist/</code> 是发布产物。</p>
       </div>
       <div class="repo-card reveal">
         <dl>
           <div><dt>代码仓库</dt><dd><a href="https://github.com/hiozings/powercontext/tree/2026-competition-ecosystem" rel="noopener">hiozings/powercontext · 2026-competition-ecosystem ↗</a></dd></div>
           <div><dt>项目目录</dt><dd><code>qoder/</code></dd></div>
-          <div><dt>技术</dt><dd>seekdb · PowerContext · Qoder Sites</dd></div>
+          <div><dt>技术</dt><dd>seekdb · PowerContext · FastAPI · Qoder Sites</dd></div>
           <div><dt>许可</dt><dd>Apache-2.0</dd></div>
         </dl>
-        <p class="repo-note">本地预览：<code>cd qoder/dist &amp;&amp; python3 -m http.server 4173</code>，打开 <code>http://127.0.0.1:4173</code>。</p>
+        <p class="repo-note">带真实检索运行：<code>cd qoder/server &amp;&amp; .venv/bin/python app.py</code>，先启动 <code>powercontext server run --host 127.0.0.1 --port 8000</code>；详细步骤见 <code>qoder/README.md</code>。</p>
       </div>
     </div>
   </section>

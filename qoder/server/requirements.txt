@@ -1,0 +1,5 @@
+pylibseekdb==1.4.0.post2
+PyMySQL==1.2.0
+fastapi==0.162.0
+uvicorn==0.54.0
+powercontext[cli,server]==1.4.1
