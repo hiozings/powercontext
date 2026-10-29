@@ -1,0 +1,8 @@
+{
+  "mode": "replay",
+  "baseline": "/tmp/sdd-baseline-4jc26cs6/demo_project",
+  "before_exit_code": 1,
+  "after_exit_code": 0,
+  "patch": "/home/xiangyv/proj/powercontext/minimax/patches/0001-books-price-filter.patch",
+  "timestamp": "2026-10-29T14:06:06.785632+00:00"
+}

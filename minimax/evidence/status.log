@@ -1,0 +1,20 @@
+{
+  "task_id": "books-price-filter",
+  "state": {
+    "task_id": "books-price-filter",
+    "stage": "verified",
+    "selected": {
+      "patch": "/home/xiangyv/proj/powercontext/minimax/patches/0001-books-price-filter.patch"
+    },
+    "verification": {
+      "before_target_failed": true,
+      "after_tests_passed": true
+    },
+    "done": [
+      "replayed patch",
+      "ran target and regression tests"
+    ],
+    "todo": [],
+    "updated_at": "2026-10-29T14:06:06.785650+00:00"
+  }
+}

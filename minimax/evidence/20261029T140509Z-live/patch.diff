@@ -1,0 +1,45 @@
+--- a/app/api/books.py
++++ b/app/api/books.py
+@@ -14,10 +14,17 @@
+ @router.get("/books", response_model=BookList)
+ def list_books(
+     genre: str | None = None,
++    min_price: float | None = Query(default=None, ge=0),
++    max_price: float | None = Query(default=None, ge=0),
+     page: int = Query(default=1, ge=1),
+     page_size: int = Query(default=10, ge=1, le=50),
+ ) -> BookList:
+-    books = repository.list(genre=genre)
++    if min_price is not None and max_price is not None and min_price > max_price:
++        raise HTTPException(
++            status_code=422,
++            detail="min_price must be less than or equal to max_price",
++        )
++    books = repository.list(genre=genre, min_price=min_price, max_price=max_price)
+     total = len(books)
+     start = (page - 1) * page_size
+     return BookList(
+--- a/app/repository.py
++++ b/app/repository.py
+@@ -22,10 +22,20 @@
+     def __init__(self, books: tuple[Book, ...] = SEED_BOOKS) -> None:
+         self._books = list(books)
+ 
+-    def list(self, *, genre: str | None = None) -> list[Book]:
++    def list(
++        self,
++        *,
++        genre: str | None = None,
++        min_price: float | None = None,
++        max_price: float | None = None,
++    ) -> list[Book]:
+         books = self._books
+         if genre is not None:
+             books = [book for book in books if book.genre == genre]
++        if min_price is not None:
++            books = [book for book in books if book.price >= min_price]
++        if max_price is not None:
++            books = [book for book in books if book.price <= max_price]
+         return list(books)
+ 
+     def get(self, book_id: int) -> Book | None:

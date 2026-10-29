@@ -1,0 +1,69 @@
+....FFFF                                                                 [100%]
+=================================== FAILURES ===================================
+__________________________ test_filter_by_price_range __________________________
+
+client = <starlette.testclient.TestClient object at 0x7f7fa5ea4440>
+
+    def test_filter_by_price_range(client: TestClient) -> None:
+        response = client.get("/books", params={"min_price": 10, "max_price": 20})
+        assert response.status_code == 200
+        payload = response.json()
+>       assert payload["total"] == 3
+E       assert 8 == 3
+
+tests/test_books.py:54: AssertionError
+_____________________ test_price_boundaries_are_inclusive ______________________
+
+client = <starlette.testclient.TestClient object at 0x7f7fa5e61c40>
+
+    def test_price_boundaries_are_inclusive(client: TestClient) -> None:
+        response = client.get("/books", params={"min_price": 18, "max_price": 22})
+        assert response.status_code == 200
+        payload = response.json()
+>       assert {book["id"] for book in payload["items"]} == {4, 6}
+E       assert {1, 2, 3, 4, 5, 6, ...} == {4, 6}
+E         
+E         Extra items in the left set:
+E         1
+E         2
+E         3
+E         5
+E         7
+E         8
+E         Use -v to get more diff
+
+tests/test_books.py:63: AssertionError
+_____________________ test_invalid_price_range_returns_422 _____________________
+
+client = <starlette.testclient.TestClient object at 0x7f7fa5e618e0>
+
+    def test_invalid_price_range_returns_422(client: TestClient) -> None:
+        response = client.get("/books", params={"min_price": 30, "max_price": 10})
+>       assert response.status_code == 422
+E       assert 200 == 422
+E        +  where 200 = <Response [200 OK]>.status_code
+
+tests/test_books.py:68: AssertionError
+_______________________ test_negative_price_returns_422 ________________________
+
+client = <starlette.testclient.TestClient object at 0x7f7fa5ea6ab0>
+
+    def test_negative_price_returns_422(client: TestClient) -> None:
+        response = client.get("/books", params={"min_price": -1})
+>       assert response.status_code == 422
+E       assert 200 == 422
+E        +  where 200 = <Response [200 OK]>.status_code
+
+tests/test_books.py:74: AssertionError
+=============================== warnings summary ===============================
+../../../home/xiangyv/proj/powercontext/minimax/.venv/lib/python3.12/site-packages/starlette/testclient.py:37
+  /home/xiangyv/proj/powercontext/minimax/.venv/lib/python3.12/site-packages/starlette/testclient.py:37: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = typing.Callable[[], typing.ContextManager[anyio.abc.BlockingPortal]]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_books.py::test_filter_by_price_range - assert 8 == 3
+FAILED tests/test_books.py::test_price_boundaries_are_inclusive - assert {1, ...
+FAILED tests/test_books.py::test_invalid_price_range_returns_422 - assert 200...
+FAILED tests/test_books.py::test_negative_price_returns_422 - assert 200 == 422
+4 failed, 4 passed, 1 warning in 0.14s

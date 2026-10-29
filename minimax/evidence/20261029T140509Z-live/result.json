@@ -1,0 +1,24 @@
+{
+  "mode": "live",
+  "protocol": "anthropic",
+  "baseline": "/tmp/sdd-baseline-sjjv_5bp/demo_project",
+  "model": "MiniMax-M3.1-Flash",
+  "attempts": [
+    {
+      "attempt": 1,
+      "content": "{\n  \"edits\": [\n    {\n      \"path\": \"app/api/books.py\",\n      \"old\": \"    genre: str | None = None,\\n    page: int = Query(default=1, ge=1),\\n    page_size: int = Query(default=10, ge=1, le=50),\\n) -> BookList:\\n    books = repository.list(genre=genre)\",\n      \"new\": \"    genre: str | None = None,\\n    min_price: float | None = Query(default=None, ge=0),\\n    max_price: float | None = Query(default=None, ge=0),\\n    page: int = Query(default=1, ge=1),\\n    page_size: int = Query(default=10, ge=1, le=50),\\n) -> BookList:\\n    if min_price is not None and max_price is not None and min_price > max_price:\\n        raise HTTPException(\\n            status_code=422,\\n            detail=\\\"min_price must be less than or equal to max_price\\\",\\n        )\\n    books = repository.list(genre=genre, min_price=min_price, max_price=max_price)\"\n    },\n    {\n      \"path\": \"app/repository.py\",\n      \"old\": \"    def list(self, *, genre: str | None = None) -> list[Book]:\\n        books = self._books\\n        if genre is not None:\\n            books = [book for book in books if book.genre == genre]\\n        return list(books)\",\n      \"new\": \"    def list(\\n        self,\\n        *,\\n        genre: str | None = None,\\n        min_price: float | None = None,\\n        max_price: float | None = None,\\n    ) -> list[Book]:\\n        books = self._books\\n        if genre is not None:\\n            books = [book for book in books if book.genre == genre]\\n        if min_price is not None:\\n            books = [book for book in books if book.price >= min_price]\\n        if max_price is not None:\\n            books = [book for book in books if book.price <= max_price]\\n        return list(books)\"\n    }\n  ]\n}",
+      "usage": {
+        "input_tokens": 2907,
+        "output_tokens": 832,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 128,
+        "output_tokens_details": {
+          "thinking_tokens": 350
+        }
+      }
+    }
+  ],
+  "before_exit_code": 1,
+  "after_exit_code": 0,
+  "timestamp": "2026-10-29T14:05:14.008906+00:00"
+}

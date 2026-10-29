@@ -1,0 +1,29 @@
+{
+  "project": "/home/xiangyv/proj/powercontext/minimax/demo_project",
+  "chunks": 18,
+  "by_type": {
+    "spec": 5,
+    "code": 5,
+    "test": 8
+  },
+  "chunk_ids": [
+    "spec:SPEC-BOOKS-LIST-1",
+    "spec:SPEC-BOOKS-FILTER-2",
+    "spec:SPEC-BOOKS-FILTER-3",
+    "spec:SPEC-BOOKS-VALIDATION-4",
+    "spec:SPEC-BOOKS-DETAIL-5",
+    "code:app/api/books.py#list_books",
+    "code:app/api/books.py#get_book",
+    "code:app/models.py#Book",
+    "code:app/models.py#BookList",
+    "code:app/repository.py#BookRepository",
+    "test:tests/test_books.py::test_list_returns_all_books",
+    "test:tests/test_books.py::test_genre_filter_is_preserved",
+    "test:tests/test_books.py::test_pagination_is_preserved",
+    "test:tests/test_books.py::test_book_detail_and_missing_book",
+    "test:tests/test_books.py::test_filter_by_price_range",
+    "test:tests/test_books.py::test_price_boundaries_are_inclusive",
+    "test:tests/test_books.py::test_invalid_price_range_returns_422",
+    "test:tests/test_books.py::test_negative_price_returns_422"
+  ]
+}

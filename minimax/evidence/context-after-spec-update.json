@@ -1,0 +1,273 @@
+{
+  "task": "Add min_price and max_price filters to GET /books. Reject min_price > max_price with HTTP 422. Keep genre filtering, pagination and the detail endpoint unchanged.",
+  "project": "/home/xiangyv/proj/powercontext/minimax/demo_project",
+  "specs": [
+    {
+      "id": "SPEC-BOOKS-DETAIL-6",
+      "path": "specs/books_api.md",
+      "line": 51,
+      "title": "Book detail",
+      "content": "Book detail\n\n## Book detail\n\n`GET /books/{id}` returns one book. An unknown id returns HTTP 404. The detail endpoint\ndoes not accept filters and must not be changed by this task.",
+      "reason": "spec clause retrieved from seekdb"
+    },
+    {
+      "id": "SPEC-BOOKS-FILTER-3",
+      "path": "specs/books_api.md",
+      "line": 24,
+      "title": "Price range filter",
+      "content": "Price range filter\n\n## Price range filter\n\n`GET /books` accepts `min_price` and `max_price` query parameters. Both are inclusive,\ndecimal values in USD. `min_price` keeps books whose price is greater than or equal to\nthe value; `max_price` keeps books whose price is less than or equal to the value.\nWhen both are supplied and `min_price` is greater than `max_price`, the API returns\nHTTP 422 with the exact detail:\n\n```text\nmin_price must be less than or equal to max_price\n```",
+      "reason": "spec clause retrieved from seekdb"
+    },
+    {
+      "id": "SPEC-BOOKS-FILTER-2",
+      "path": "specs/books_api.md",
+      "line": 17,
+      "title": "Genre filter",
+      "content": "Genre filter\n\n## Genre filter\n\n`GET /books?genre=<value>` returns only books whose `genre` exactly equals the value.\nAn unknown genre returns an empty collection with `total` equal to zero. The genre\nfilter must keep working together with pagination.",
+      "reason": "spec clause retrieved from seekdb"
+    },
+    {
+      "id": "SPEC-BOOKS-LIST-1",
+      "path": "specs/books_api.md",
+      "line": 10,
+      "title": "List books",
+      "content": "List books\n\n## List books\n\n`GET /books` returns a paginated collection. The response contains `items`, `total`,\n`page` and `page_size`. `total` is the number of books matching the filters, before\npagination. Existing clients rely on the default `page=1` and `page_size=10`.",
+      "reason": "spec clause retrieved from seekdb"
+    },
+    {
+      "id": "SPEC-BOOKS-FILTER-4",
+      "path": "specs/books_api.md",
+      "line": 37,
+      "title": "Filtered pagination",
+      "content": "Filtered pagination\n\n## Filtered pagination\n\nWhen `min_price` or `max_price` is supplied, the response `total` counts only matching\nbooks, before pagination. The page slice is then taken from that filtered collection.\nFor example, `GET /books?min_price=10&max_price=20&page=2&page_size=2` returns the\nsecond page of the three matching books.",
+      "reason": "spec clause retrieved from seekdb"
+    }
+  ],
+  "code": [
+    {
+      "path": "app/api/books.py",
+      "symbols": [
+        "get_book",
+        "list_books"
+      ],
+      "content": "\"\"\"HTTP routes for the bookstore demo.\"\"\"\n\nfrom __future__ import annotations\n\nfrom fastapi import APIRouter, HTTPException, Query\n\nfrom app.models import Book, BookList\nfrom app.repository import BookRepository\n\nrouter = APIRouter()\nrepository = BookRepository()\n\n\n@router.get(\"/books\", response_model=BookList)\ndef list_books(\n    genre: str | None = None,\n    min_price: float | None = Query(default=None, ge=0),\n    max_price: float | None = Query(default=None, ge=0),\n    page: int = Query(default=1, ge=1),\n    page_size: int = Query(default=10, ge=1, le=50),\n) -> BookList:\n    if min_price is not None and max_price is not None and min_price > max_price:\n        raise HTTPException(\n            status_code=422,\n            detail=\"min_price must be less than or equal to max_price\",\n        )\n    books = repository.list(genre=genre, min_price=min_price, max_price=max_price)\n    total = len(books)\n    start = (page - 1) * page_size\n    return BookList(\n        items=books[start : start + page_size],\n        total=total,\n        page=page,\n        page_size=page_size,\n    )\n\n\n@router.get(\"/books/{book_id}\", response_model=Book)\ndef get_book(book_id: int) -> Book:\n    book = repository.get(book_id)\n    if book is None:\n        raise HTTPException(status_code=404, detail=\"book not found\")\n    return book\n",
+      "reason": "symbol/path matched task; seekdb chunk code:app/api/books.py#list_books"
+    },
+    {
+      "path": "app/repository.py",
+      "symbols": [
+        "BookRepository"
+      ],
+      "content": "\"\"\"In-memory book repository used by the demo service.\"\"\"\n\nfrom __future__ import annotations\n\nfrom app.models import Book\n\nSEED_BOOKS: tuple[Book, ...] = (\n    Book(id=1, title=\"The Pragmatic Programmer\", author=\"Hunt & Thomas\", genre=\"technology\", price=39.99),\n    Book(id=2, title=\"Clean Code\", author=\"Robert C. Martin\", genre=\"technology\", price=32.50),\n    Book(id=3, title=\"The Hobbit\", author=\"J. R. R. Tolkien\", genre=\"fantasy\", price=12.99),\n    Book(id=4, title=\"Dune\", author=\"Frank Herbert\", genre=\"science-fiction\", price=18.00),\n    Book(id=5, title=\"The Left Hand of Darkness\", author=\"Ursula K. Le Guin\", genre=\"science-fiction\", price=15.75),\n    Book(id=6, title=\"A Brief History of Time\", author=\"Stephen Hawking\", genre=\"science\", price=22.00),\n    Book(id=7, title=\"The Name of the Wind\", author=\"Patrick Rothfuss\", genre=\"fantasy\", price=28.00),\n    Book(id=8, title=\"Sapiens\", author=\"Yuval Noah Harari\", genre=\"history\", price=24.50),\n)\n\n\nclass BookRepository:\n    \"\"\"Read-only repository; the demo keeps its data in process memory.\"\"\"\n\n    def __init__(self, books: tuple[Book, ...] = SEED_BOOKS) -> None:\n        self._books = list(books)\n\n    def list(\n        self,\n        *,\n        genre: str | None = None,\n        min_price: float | None = None,\n        max_price: float | None = None,\n    ) -> list[Book]:\n        books = self._books\n        if genre is not None:\n            books = [book for book in books if book.genre == genre]\n        if min_price is not None:\n            books = [book for book in books if book.price >= min_price]\n        if max_price is not None:\n            books = [book for book in books if book.price <= max_price]\n        return list(books)\n\n    def get(self, book_id: int) -> Book | None:\n        return next((book for book in self._books if book.id == book_id), None)\n",
+      "reason": "symbol/path matched task; seekdb chunk code:app/repository.py#BookRepository"
+    },
+    {
+      "path": "app/models.py",
+      "symbols": [
+        "Book"
+      ],
+      "content": "\"\"\"Book models for the demo bookstore service.\"\"\"\n\nfrom __future__ import annotations\n\nfrom pydantic import BaseModel, Field\n\n\nclass Book(BaseModel):\n    id: int\n    title: str\n    author: str\n    genre: str\n    price: float = Field(ge=0)\n\n\nclass BookList(BaseModel):\n    items: list[Book]\n    total: int\n    page: int\n    page_size: int\n",
+      "reason": "symbol/path matched task; seekdb chunk code:app/models.py#Book"
+    }
+  ],
+  "tests": [
+    {
+      "path": "tests/test_books.py",
+      "nodeid": "tests/test_books.py::test_invalid_price_range_returns_422",
+      "name": "test_invalid_price_range_returns_422",
+      "content": "def test_invalid_price_range_returns_422(client: TestClient) -> None:\n    response = client.get(\"/books\", params={\"min_price\": 30, \"max_price\": 10})\n    assert response.status_code == 422\n    assert \"min_price\" in response.json()[\"detail\"]",
+      "reason": "test retrieved from seekdb"
+    },
+    {
+      "path": "tests/test_books.py",
+      "nodeid": "tests/test_books.py::test_negative_price_returns_422",
+      "name": "test_negative_price_returns_422",
+      "content": "def test_negative_price_returns_422(client: TestClient) -> None:\n    response = client.get(\"/books\", params={\"min_price\": -1})\n    assert response.status_code == 422",
+      "reason": "test retrieved from seekdb"
+    },
+    {
+      "path": "tests/test_books.py",
+      "nodeid": "tests/test_books.py::test_filter_by_price_range",
+      "name": "test_filter_by_price_range",
+      "content": "def test_filter_by_price_range(client: TestClient) -> None:\n    response = client.get(\"/books\", params={\"min_price\": 10, \"max_price\": 20})\n    assert response.status_code == 200\n    payload = response.json()\n    assert payload[\"total\"] == 3\n    assert {book[\"id\"] for book in payload[\"items\"]} == {3, 4, 5}\n    assert all(10 <= book[\"price\"] <= 20 for book in payload[\"items\"])",
+      "reason": "test retrieved from seekdb"
+    },
+    {
+      "path": "tests/test_books.py",
+      "nodeid": "tests/test_books.py::test_price_boundaries_are_inclusive",
+      "name": "test_price_boundaries_are_inclusive",
+      "content": "def test_price_boundaries_are_inclusive(client: TestClient) -> None:\n    response = client.get(\"/books\", params={\"min_price\": 18, \"max_price\": 22})\n    assert response.status_code == 200\n    payload = response.json()\n    assert {book[\"id\"] for book in payload[\"items\"]} == {4, 6}",
+      "reason": "test retrieved from seekdb"
+    },
+    {
+      "path": "tests/test_books.py",
+      "nodeid": "tests/test_books.py::test_genre_filter_is_preserved",
+      "name": "test_genre_filter_is_preserved",
+      "content": "def test_genre_filter_is_preserved(client: TestClient) -> None:\n    response = client.get(\"/books\", params={\"genre\": \"fantasy\"})\n    assert response.status_code == 200\n    payload = response.json()\n    assert payload[\"total\"] == 2\n    assert {book[\"id\"] for book in payload[\"items\"]} == {3, 7}",
+      "reason": "test retrieved from seekdb"
+    },
+    {
+      "path": "tests/test_books.py",
+      "nodeid": "tests/test_books.py::test_book_detail_and_missing_book",
+      "name": "test_book_detail_and_missing_book",
+      "content": "def test_book_detail_and_missing_book(client: TestClient) -> None:\n    found = client.get(\"/books/3\")\n    assert found.status_code == 200\n    assert found.json()[\"title\"] == \"The Hobbit\"\n    missing = client.get(\"/books/999\")\n    assert missing.status_code == 404",
+      "reason": "test retrieved from seekdb"
+    },
+    {
+      "path": "tests/test_books.py",
+      "nodeid": "tests/test_books.py::test_pagination_is_preserved",
+      "name": "test_pagination_is_preserved",
+      "content": "def test_pagination_is_preserved(client: TestClient) -> None:\n    response = client.get(\"/books\", params={\"page\": 2, \"page_size\": 3})\n    assert response.status_code == 200\n    payload = response.json()\n    assert payload[\"page\"] == 2\n    assert payload[\"page_size\"] == 3\n    assert payload[\"total\"] == 8\n    assert len(payload[\"items\"]) == 3",
+      "reason": "test retrieved from seekdb"
+    },
+    {
+      "path": "tests/test_books.py",
+      "nodeid": "tests/test_books.py::test_list_returns_all_books",
+      "name": "test_list_returns_all_books",
+      "content": "def test_list_returns_all_books(client: TestClient) -> None:\n    response = client.get(\"/books\")\n    assert response.status_code == 200\n    payload = response.json()\n    assert payload[\"total\"] == 8\n    assert len(payload[\"items\"]) == 8",
+      "reason": "test retrieved from seekdb"
+    }
+  ],
+  "state": {
+    "task_id": "books-price-filter",
+    "stage": "verified",
+    "selected": {
+      "specs": [
+        "SPEC-BOOKS-DETAIL-5",
+        "SPEC-BOOKS-FILTER-3",
+        "SPEC-BOOKS-FILTER-2",
+        "SPEC-BOOKS-LIST-1",
+        "SPEC-BOOKS-VALIDATION-4"
+      ]
+    },
+    "verification": {
+      "before_target_failed": true,
+      "after_tests_passed": true
+    },
+    "done": [
+      "MiniMax generated the patch",
+      "target and regression tests passed"
+    ],
+    "todo": [],
+    "updated_at": "2026-10-29T14:05:14.008925+00:00"
+  },
+  "selection": {
+    "query": "add min_price and max_price filters get books reject with http 422 keep genre filtering pagination the detail endpoint unchanged",
+    "chunk_ids": [
+      "spec:SPEC-BOOKS-DETAIL-6",
+      "spec:SPEC-BOOKS-FILTER-3",
+      "spec:SPEC-BOOKS-FILTER-2",
+      "spec:SPEC-BOOKS-LIST-1",
+      "spec:SPEC-BOOKS-FILTER-4",
+      "code:app/api/books.py#list_books",
+      "code:app/repository.py#BookRepository",
+      "code:app/models.py#Book",
+      "test:tests/test_books.py::test_invalid_price_range_returns_422",
+      "test:tests/test_books.py::test_negative_price_returns_422",
+      "test:tests/test_books.py::test_filter_by_price_range",
+      "test:tests/test_books.py::test_price_boundaries_are_inclusive",
+      "test:tests/test_books.py::test_genre_filter_is_preserved",
+      "test:tests/test_books.py::test_book_detail_and_missing_book",
+      "test:tests/test_books.py::test_pagination_is_preserved",
+      "test:tests/test_books.py::test_list_returns_all_books"
+    ],
+    "sources": [
+      {
+        "chunk_id": "spec:SPEC-BOOKS-DETAIL-6",
+        "path": "specs/books_api.md",
+        "exists": true,
+        "source_id": "SPEC-BOOKS-DETAIL-6"
+      },
+      {
+        "chunk_id": "spec:SPEC-BOOKS-FILTER-3",
+        "path": "specs/books_api.md",
+        "exists": true,
+        "source_id": "SPEC-BOOKS-FILTER-3"
+      },
+      {
+        "chunk_id": "spec:SPEC-BOOKS-FILTER-2",
+        "path": "specs/books_api.md",
+        "exists": true,
+        "source_id": "SPEC-BOOKS-FILTER-2"
+      },
+      {
+        "chunk_id": "spec:SPEC-BOOKS-LIST-1",
+        "path": "specs/books_api.md",
+        "exists": true,
+        "source_id": "SPEC-BOOKS-LIST-1"
+      },
+      {
+        "chunk_id": "spec:SPEC-BOOKS-FILTER-4",
+        "path": "specs/books_api.md",
+        "exists": true,
+        "source_id": "SPEC-BOOKS-FILTER-4"
+      },
+      {
+        "chunk_id": "code:app/api/books.py#list_books",
+        "path": "app/api/books.py",
+        "exists": true,
+        "source_id": "app/api/books.py#list_books"
+      },
+      {
+        "chunk_id": "code:app/repository.py#BookRepository",
+        "path": "app/repository.py",
+        "exists": true,
+        "source_id": "app/repository.py#BookRepository"
+      },
+      {
+        "chunk_id": "code:app/models.py#Book",
+        "path": "app/models.py",
+        "exists": true,
+        "source_id": "app/models.py#Book"
+      },
+      {
+        "chunk_id": "test:tests/test_books.py::test_invalid_price_range_returns_422",
+        "path": "tests/test_books.py",
+        "exists": true,
+        "source_id": "tests/test_books.py::test_invalid_price_range_returns_422"
+      },
+      {
+        "chunk_id": "test:tests/test_books.py::test_negative_price_returns_422",
+        "path": "tests/test_books.py",
+        "exists": true,
+        "source_id": "tests/test_books.py::test_negative_price_returns_422"
+      },
+      {
+        "chunk_id": "test:tests/test_books.py::test_filter_by_price_range",
+        "path": "tests/test_books.py",
+        "exists": true,
+        "source_id": "tests/test_books.py::test_filter_by_price_range"
+      },
+      {
+        "chunk_id": "test:tests/test_books.py::test_price_boundaries_are_inclusive",
+        "path": "tests/test_books.py",
+        "exists": true,
+        "source_id": "tests/test_books.py::test_price_boundaries_are_inclusive"
+      },
+      {
+        "chunk_id": "test:tests/test_books.py::test_genre_filter_is_preserved",
+        "path": "tests/test_books.py",
+        "exists": true,
+        "source_id": "tests/test_books.py::test_genre_filter_is_preserved"
+      },
+      {
+        "chunk_id": "test:tests/test_books.py::test_book_detail_and_missing_book",
+        "path": "tests/test_books.py",
+        "exists": true,
+        "source_id": "tests/test_books.py::test_book_detail_and_missing_book"
+      },
+      {
+        "chunk_id": "test:tests/test_books.py::test_pagination_is_preserved",
+        "path": "tests/test_books.py",
+        "exists": true,
+        "source_id": "tests/test_books.py::test_pagination_is_preserved"
+      },
+      {
+        "chunk_id": "test:tests/test_books.py::test_list_returns_all_books",
+        "path": "tests/test_books.py",
+        "exists": true,
+        "source_id": "tests/test_books.py::test_list_returns_all_books"
+      }
+    ]
+  }
+}

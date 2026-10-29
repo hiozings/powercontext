@@ -1,0 +1,19 @@
+{
+  "checks": {
+    "baseline_target_tests_fail": true,
+    "baseline_regressions_pass": true,
+    "final_tests_pass": true,
+    "ingest_runs": true,
+    "context_has_spec": true,
+    "context_has_code": true,
+    "context_has_target_test": true,
+    "context_has_regression_test": true,
+    "context_sources_exist": true,
+    "spec_update_visible": true,
+    "seekdb_has_chunks": true,
+    "replay_patch_effective": true,
+    "patch_tests_untouched": true,
+    "powercontext_state_reused": true
+  },
+  "timestamp": "20261029T140544Z"
+}
